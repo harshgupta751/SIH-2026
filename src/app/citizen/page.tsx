@@ -46,6 +46,13 @@ type Application = {
   } | null;
 };
 
+function statusTone(status: string) {
+  if (status === 'APPROVED') return 'text-success';
+  if (status === 'REJECTED') return 'text-danger';
+  if (status === 'CONSENT_PENDING') return 'text-warn';
+  return 'text-copper';
+}
+
 export default function CitizenPortalPage() {
   const [profile, setProfile] = useState<any>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -171,72 +178,70 @@ export default function CitizenPortalPage() {
   };
 
   if (loading) {
-    return <div className="max-w-7xl mx-auto px-4 py-16 text-sm text-slate-500">Loading your services…</div>;
+    return <div className="ms-page text-sm text-mute">Loading your services…</div>;
   }
 
   const addr = profile?.address;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="ms-page space-y-8">
       {alertMessage && (
-        <div className="p-4 rounded-xl bg-emerald-700 text-white text-sm flex items-center justify-between">
-          <span>{alertMessage}</span>
-          <button onClick={() => setAlertMessage(null)} className="text-xs px-2 py-1 rounded bg-white/20">
+        <div className="ms-card px-4 py-3 flex items-start sm:items-center justify-between gap-3 text-sm">
+          <span className="text-ink">{alertMessage}</span>
+          <button onClick={() => setAlertMessage(null)} className="ms-btn ms-btn-ghost h-8 px-2 text-xs shrink-0">
             Dismiss
           </button>
         </div>
       )}
 
-      <div className="glass-panel p-6 rounded-2xl">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="ms-card p-5 sm:p-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-extrabold text-slate-900">{profile?.fullName}</h1>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                <ShieldCheck className="w-3.5 h-3.5" /> Verified citizen
+            <p className="ms-label mb-2">Citizen portal</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-display text-2xl sm:text-3xl text-ink">{profile?.fullName}</h1>
+              <span className="ms-chip text-success border-line">
+                <ShieldCheck className="w-3 h-3" /> Verified citizen
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-sm text-mute mt-2">
               {profile?.email} · {profile?.mobile}
             </p>
           </div>
-          <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs max-w-sm">
-            <span className="text-slate-400 font-medium block text-[10px] uppercase">Registered address</span>
-            <span className="font-medium text-slate-800">
+          <div className="max-w-sm">
+            <span className="ms-label">Registered address</span>
+            <p className="mt-1.5 text-sm text-ink leading-relaxed">
               {addr ? `${addr.line1}, ${addr.locality}, ${addr.city}, ${addr.state} - ${addr.postalCode}` : '—'}
-            </span>
+            </p>
           </div>
         </div>
       </div>
 
       {activeConsent && (
-        <div className="p-6 rounded-2xl border-2 border-amber-400 bg-amber-50 space-y-3">
+        <div className="ms-card p-5 sm:p-6 space-y-4" style={{ borderColor: 'var(--copper)' }}>
           <div className="flex items-center gap-2">
-            <Lock className="w-4 h-4 text-amber-700" />
-            <h3 className="font-bold text-slate-900">Consent required</h3>
+            <Lock className="w-4 h-4 text-copper" />
+            <h3 className="font-medium text-ink">Consent required</h3>
           </div>
-          <p className="text-sm text-slate-700">{activeConsent.purpose}</p>
-          <p className="text-xs text-slate-600">
+          <p className="text-sm text-ink leading-relaxed">{activeConsent.purpose}</p>
+          <p className="text-sm text-mute">
             {activeConsent.requestedByDept} is requesting records from {activeConsent.sourceDept}.
           </p>
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap gap-2">
             {(activeConsent.dataFields || []).map((f: string) => (
-              <span key={f} className="px-2 py-0.5 rounded bg-white border font-mono">
+              <span key={f} className="ms-chip font-mono">
                 {f}
               </span>
             ))}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
             <button
               onClick={() => handleGrantConsent(activeConsent.id, activeConsent.applicationId)}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold"
+              className="ms-btn ms-btn-success"
             >
               <Check className="w-4 h-4" /> Grant consent
             </button>
-            <button
-              onClick={() => handleDenyConsent(activeConsent.id)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 text-sm"
-            >
+            <button onClick={() => handleDenyConsent(activeConsent.id)} className="ms-btn ms-btn-secondary">
               <X className="w-4 h-4" /> Deny
             </button>
           </div>
@@ -244,30 +249,30 @@ export default function CitizenPortalPage() {
       )}
 
       <section className="space-y-4">
-        <h2 className="text-xl font-bold text-slate-900">Available services</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <h2 className="font-display text-2xl text-ink">Available services</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {services.map((srv) => (
-            <div key={srv.code} className="glass-panel p-5 rounded-2xl flex flex-col justify-between">
+            <div key={srv.code} className="ms-card p-5 flex flex-col justify-between">
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">{srv.departmentName}</span>
-                  <span className="text-[11px] text-slate-500">SLA {srv.slaDays} days</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="ms-chip">{srv.departmentName}</span>
+                  <span className="text-[11px] text-mute font-mono">SLA {srv.slaDays}d</span>
                 </div>
-                <h3 className="font-bold text-slate-900">{srv.name}</h3>
-                <p className="text-xs text-slate-600">{srv.description}</p>
-                <p className="text-[11px] text-slate-600 bg-slate-50 border rounded-lg p-2">
+                <h3 className="font-medium text-ink leading-snug">{srv.name}</h3>
+                <p className="text-sm text-mute leading-relaxed">{srv.description}</p>
+                <p className="text-[12px] text-mute border border-line rounded-ms p-2.5 bg-canvas">
                   Required records: {srv.requiredClearance}
                 </p>
               </div>
-              <div className="mt-5 pt-4 border-t flex items-center justify-between">
-                <span className="text-xs font-bold">{srv.fee === 0 ? 'No fee' : `Fee ₹${srv.fee}`}</span>
+              <div className="mt-5 pt-4 border-t border-line flex items-center justify-between gap-3">
+                <span className="text-sm text-ink">{srv.fee === 0 ? 'No fee' : `Fee ₹${srv.fee}`}</span>
                 <button
                   onClick={() => {
                     setSelectedService(srv);
                     setFormError(null);
                     setIsApplyModalOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold"
+                  className="ms-btn ms-btn-primary h-9 px-3 text-xs"
                 >
                   Apply <ArrowRight className="w-3.5 h-3.5" />
                 </button>
@@ -278,57 +283,52 @@ export default function CitizenPortalPage() {
       </section>
 
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Your applications</h2>
-          <button onClick={loadData} className="flex items-center gap-1.5 text-xs text-slate-600">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-2xl text-ink">Your applications</h2>
+          <button onClick={loadData} className="ms-btn ms-btn-ghost h-9 text-xs">
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>
         </div>
         {applications.length === 0 ? (
-          <div className="p-8 text-center rounded-2xl border-2 border-dashed text-slate-500 text-xs">
+          <div className="border border-dashed border-line rounded-ms p-10 text-center text-sm text-mute">
             No applications yet. Choose a service above to start.
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {applications.map((app) => (
-              <div key={app.id} className="glass-panel p-6 rounded-2xl space-y-4">
+              <div key={app.id} className="ms-card p-5 sm:p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between gap-3">
                   <div>
-                    <span className="font-mono text-sm font-bold text-blue-900">{app.applicationNumber}</span>
-                    <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100">{statusLabel(app.status)}</span>
-                    <p className="text-xs text-slate-600 mt-1">
+                    <span className="font-mono text-sm text-ink">{app.applicationNumber}</span>
+                    <span className={`ml-2 text-[11px] font-medium ${statusTone(app.status)}`}>{statusLabel(app.status)}</span>
+                    <p className="text-sm text-mute mt-1">
                       {app.serviceName} {app.businessName ? `· ${app.businessName}` : ''}
                     </p>
                   </div>
                   {app.status === 'APPROVED' && (
-                    <button
-                      onClick={() => setViewCertificateApp(app)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold"
-                    >
+                    <button onClick={() => setViewCertificateApp(app)} className="ms-btn ms-btn-success h-9 text-xs self-start">
                       <Download className="w-3.5 h-3.5" /> View certificate
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     ['Submitted', true],
                     ['Consent', app.status !== 'CONSENT_PENDING'],
                     ['Department records', Boolean(app.revenueClearanceRef || app.status === 'PENDING_OFFICER_REVIEW' || app.status === 'APPROVED')],
                     ['Decision', app.status === 'APPROVED' || app.status === 'REJECTED'],
                   ].map(([label, done]) => (
-                    <div key={String(label)} className="p-3 rounded-xl bg-slate-50 border">
-                      <div className="flex justify-between mb-1">
-                        {done ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Clock className="w-4 h-4 text-slate-400" />}
-                      </div>
-                      <p className="font-bold text-slate-800">{label as string}</p>
+                    <div key={String(label)} className="p-3 rounded-ms border border-line bg-canvas">
+                      {done ? <CheckCircle2 className="w-4 h-4 text-success mb-2" /> : <Clock className="w-4 h-4 text-mute mb-2" />}
+                      <p className="text-xs font-medium text-ink">{label as string}</p>
                     </div>
                   ))}
                 </div>
-                <div className="text-xs space-y-1 bg-slate-50 rounded-xl p-3 border">
+                <div className="text-sm space-y-2 border border-line rounded-ms p-3 bg-canvas">
                   {(app.timeline || []).map((t, idx) => (
-                    <div key={idx}>
-                      <span className="font-medium text-slate-900">{t.details}</span>
-                      <span className="text-slate-400 ml-2">— {t.actor}</span>
+                    <div key={idx} className="flex flex-col sm:flex-row sm:gap-2">
+                      <span className="text-ink">{t.details}</span>
+                      <span className="text-mute font-mono text-[11px] sm:ml-auto shrink-0">— {t.actor}</span>
                     </div>
                   ))}
                 </div>
@@ -339,29 +339,24 @@ export default function CitizenPortalPage() {
       </section>
 
       {isApplyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex justify-between">
-              <h3 className="text-lg font-bold">Apply for {selectedService?.name}</h3>
-              <button onClick={() => setIsApplyModalOpen(false)}>
+        <div className="ms-overlay no-print">
+          <div className="ms-modal">
+            <div className="flex justify-between items-start gap-4">
+              <h3 className="font-display text-xl text-ink">Apply for {selectedService?.name}</h3>
+              <button onClick={() => setIsApplyModalOpen(false)} className="text-mute hover:text-ink" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleApply} className="space-y-4 text-sm">
+            <form onSubmit={handleApply} className="space-y-4">
               {selectedService?.code === 'BUSINESS_LICENSE' && (
                 <>
                   <div>
-                    <label className="block font-medium mb-1">Business / establishment name</label>
-                    <input
-                      required
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border"
-                    />
+                    <label className="block text-sm font-medium mb-1.5">Business / establishment name</label>
+                    <input required value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="ms-input" />
                   </div>
                   <div>
-                    <label className="block font-medium mb-1">Trade category</label>
-                    <select value={tradeCategory} onChange={(e) => setTradeCategory(e.target.value)} className="w-full px-3 py-2 rounded-lg border bg-white">
+                    <label className="block text-sm font-medium mb-1.5">Trade category</label>
+                    <select value={tradeCategory} onChange={(e) => setTradeCategory(e.target.value)} className="ms-input">
                       <option value="COMMERCIAL_RETAIL">Commercial retail</option>
                       <option value="IT_AND_COMMUNICATIONS">IT / communications</option>
                       <option value="FOOD_AND_BEVERAGE">Food & hospitality</option>
@@ -370,15 +365,15 @@ export default function CitizenPortalPage() {
                   </div>
                 </>
               )}
-              <p className="text-xs text-slate-600 bg-blue-50 border border-blue-100 rounded-lg p-3">
+              <p className="text-sm text-mute border border-line rounded-ms p-3 bg-canvas">
                 You will be asked to grant consent before any other department can read your records.
               </p>
-              {formError && <p className="text-sm text-rose-600">{formError}</p>}
+              {formError && <p className="text-sm text-danger">{formError}</p>}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setIsApplyModalOpen(false)} className="px-4 py-2 rounded-lg">
+                <button type="button" onClick={() => setIsApplyModalOpen(false)} className="ms-btn ms-btn-ghost">
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} className="px-5 py-2 rounded-lg bg-blue-600 text-white font-bold">
+                <button type="submit" disabled={submitting} className="ms-btn ms-btn-primary">
                   {submitting ? 'Submitting…' : 'Submit'}
                 </button>
               </div>
@@ -388,24 +383,25 @@ export default function CitizenPortalPage() {
       )}
 
       {viewCertificateApp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-8 space-y-4 text-center relative">
-            <button className="absolute top-4 right-4" onClick={() => setViewCertificateApp(null)}>
+        <div className="ms-overlay no-print">
+          <div className="ms-modal sm:max-w-xl text-left relative">
+            <button className="absolute top-5 right-5 text-mute hover:text-ink no-print" onClick={() => setViewCertificateApp(null)} aria-label="Close">
               <X className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-extrabold">{viewCertificateApp.serviceName || 'Certificate'}</h2>
-            <p className="font-mono text-sm text-blue-900">{viewCertificateApp.municipalPermitRef || viewCertificateApp.revenueClearanceRef}</p>
-            <div className="text-left text-xs space-y-2 bg-slate-50 p-4 rounded-xl border">
-              <div className="flex justify-between"><span>Holder</span><span className="font-bold">{profile?.fullName}</span></div>
-              <div className="flex justify-between"><span>Reference</span><span className="font-mono">{viewCertificateApp.applicationNumber}</span></div>
+            <p className="ms-label">Issued certificate</p>
+            <h2 className="font-display text-2xl text-ink mt-2">{viewCertificateApp.serviceName || 'Certificate'}</h2>
+            <p className="font-mono text-sm text-copper mt-2">{viewCertificateApp.municipalPermitRef || viewCertificateApp.revenueClearanceRef}</p>
+            <div className="text-sm space-y-2.5 border border-line rounded-ms p-4 bg-canvas mt-4">
+              <div className="flex justify-between gap-4"><span className="text-mute">Holder</span><span className="font-medium text-right">{profile?.fullName}</span></div>
+              <div className="flex justify-between gap-4"><span className="text-mute">Reference</span><span className="font-mono text-right">{viewCertificateApp.applicationNumber}</span></div>
               {viewCertificateApp.businessName && (
-                <div className="flex justify-between"><span>Establishment</span><span className="font-bold">{viewCertificateApp.businessName}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-mute">Establishment</span><span className="font-medium text-right">{viewCertificateApp.businessName}</span></div>
               )}
               {viewCertificateApp.revenueClearanceRef && (
-                <div className="flex justify-between"><span>Revenue clearance</span><span>{viewCertificateApp.revenueClearanceRef}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-mute">Revenue clearance</span><span className="font-mono text-right">{viewCertificateApp.revenueClearanceRef}</span></div>
               )}
             </div>
-            <button onClick={() => window.print()} className="px-6 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">
+            <button onClick={() => window.print()} className="ms-btn ms-btn-primary w-full no-print mt-2">
               Print / save
             </button>
           </div>

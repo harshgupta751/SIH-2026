@@ -1,37 +1,43 @@
-import type { Config } from "tailwindcss";
+import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: 'class',
   content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-        primary: {
-          50: '#eef6ff',
-          100: '#d9ebff',
-          200: '#bcddfe',
-          300: '#8ec8fd',
-          400: '#58a8fa',
-          500: '#2563eb',
-          600: '#1d4ed8',
-          700: '#1e40af',
-          800: '#1e3a8a',
-          900: '#172554',
-          950: '#0f172a',
+        canvas: 'var(--bg)',
+        elevated: 'var(--bg-elevated)',
+        surface: 'var(--surface)',
+        ink: 'var(--text)',
+        mute: 'var(--text-muted)',
+        line: 'var(--border)',
+        accent: {
+          DEFAULT: 'var(--accent)',
+          fg: 'var(--accent-fg)',
+          hover: 'var(--accent-hover)',
+          muted: 'var(--accent-muted)',
         },
-        india: {
-          saffron: '#FF9933',
-          navy: '#000080',
-          green: '#138808',
-        }
+        copper: 'var(--copper)',
+        success: 'var(--success)',
+        danger: 'var(--danger)',
+        warn: 'var(--warn)',
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'ui-serif', 'Georgia', 'serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+      },
+      boxShadow: {
+        lift: 'var(--shadow-lift)',
+        inset: 'var(--shadow-inset)',
+      },
+      borderRadius: {
+        ms: '10px',
       },
     },
   },

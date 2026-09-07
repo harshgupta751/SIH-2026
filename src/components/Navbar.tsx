@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ShieldCheck, User, Building2, Sliders, LogOut, Radio } from 'lucide-react';
+import { Building2, LogOut, Menu, Radio, Sliders, User, X } from 'lucide-react';
+import BrandMark from '@/components/BrandMark';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 type SessionUser = {
   id: string;
@@ -17,6 +19,7 @@ export default function Navbar() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -26,6 +29,10 @@ export default function Navbar() {
         else setUser(null);
       })
       .catch(() => setUser(null));
+  }, [pathname]);
+
+  useEffect(() => {
+    setMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -68,26 +75,24 @@ export default function Navbar() {
     { href: '/admin', label: 'Gateway admin', show: user?.role === 'ADMIN', icon: Sliders },
   ];
 
+  const go = (href: string) => {
+    router.push(href);
+    setMenuOpen(false);
+  };
+
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      <div className="h-1 w-full bg-gradient-to-r from-india-saffron via-white to-india-green" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <button onClick={() => router.push('/')} className="flex items-center gap-2.5 text-left group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 flex items-center justify-center text-white shadow-md">
-              <ShieldCheck className="w-6 h-6 text-amber-300" />
-            </div>
-            <div>
-              <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-blue-900 to-indigo-700 bg-clip-text text-transparent">
-                MahaSetu
-              </span>
-              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
-                Government interoperability platform
-              </p>
-            </div>
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-[3.75rem] gap-3">
+          <button onClick={() => go('/')} className="flex items-center gap-2.5 text-left min-w-0">
+            <BrandMark className="h-8 w-8 shrink-0" />
+            <span className="min-w-0">
+              <span className="block font-display text-[1.15rem] leading-none tracking-tight text-ink">MahaSetu</span>
+              <span className="hidden sm:block text-[10px] uppercase tracking-[0.16em] text-mute mt-1">Interoperability</span>
+            </span>
           </button>
 
-          <nav className="flex items-center gap-1 sm:gap-2">
+          <nav className="hidden md:flex items-center gap-0.5">
             {navItems
               .filter((item) => item.show)
               .map((item) => {
@@ -95,9 +100,9 @@ export default function Navbar() {
                 return (
                   <button
                     key={item.href}
-                    onClick={() => router.push(item.href)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                    onClick={() => go(item.href)}
+                    className={`px-3 py-1.5 rounded-ms text-[13px] transition ${
+                      isActive ? 'bg-ink text-canvas' : 'text-mute hover:text-ink hover:bg-elevated'
                     }`}
                   >
                     {item.label}
@@ -106,48 +111,81 @@ export default function Navbar() {
               })}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {user && (
-              <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs">
-                <span className={`w-2 h-2 rounded-full ${sseConnected ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                <span className="text-[11px] text-slate-600">{sseConnected ? 'Live updates' : 'Connecting'}</span>
+              <div className="hidden lg:flex items-center gap-2 px-2.5 h-8 rounded-full border border-line text-[11px] text-mute">
+                <span className={`h-1.5 w-1.5 rounded-full ${sseConnected ? 'bg-success' : 'bg-warn'}`} />
+                {sseConnected ? 'Live' : 'Connecting'}
               </div>
             )}
+            <ThemeToggle />
             {user ? (
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:block text-xs text-slate-600 max-w-[140px] truncate">{user.name}</span>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
-                >
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-[13px] text-mute max-w-[120px] truncate">{user.name}</span>
+                <button onClick={handleLogout} className="ms-btn ms-btn-ghost h-9 px-3 text-[13px]">
                   <LogOut className="w-3.5 h-3.5" />
                   Sign out
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => router.push('/login')}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
+              <div className="hidden sm:flex items-center gap-1.5">
+                <button onClick={() => go('/login')} className="ms-btn ms-btn-ghost h-9 px-3 text-[13px]">
                   Sign in
                 </button>
-                <button
-                  onClick={() => router.push('/register')}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white"
-                >
+                <button onClick={() => go('/register')} className="ms-btn ms-btn-primary h-9 px-3 text-[13px]">
                   Register
                 </button>
               </div>
             )}
+            <button
+              type="button"
+              className="md:hidden h-9 w-9 inline-flex items-center justify-center rounded-ms border border-line text-ink"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
         </div>
       </div>
+
+      {menuOpen && (
+        <div className="md:hidden border-t border-line bg-surface px-4 py-3 space-y-1">
+          {navItems
+            .filter((item) => item.show)
+            .map((item) => (
+              <button
+                key={item.href}
+                onClick={() => go(item.href)}
+                className={`w-full text-left px-3 py-2.5 rounded-ms text-sm ${
+                  pathname === item.href ? 'bg-ink text-canvas' : 'text-ink hover:bg-elevated'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          {user ? (
+            <button onClick={handleLogout} className="w-full text-left px-3 py-2.5 rounded-ms text-sm text-mute">
+              Sign out
+            </button>
+          ) : (
+            <>
+              <button onClick={() => go('/login')} className="w-full text-left px-3 py-2.5 rounded-ms text-sm">
+                Sign in
+              </button>
+              <button onClick={() => go('/register')} className="w-full text-left px-3 py-2.5 rounded-ms text-sm bg-accent text-accent-fg">
+                Register
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {lastEvent && (
-        <div className="bg-indigo-900 text-white text-xs py-1 px-4">
-          <div className="flex items-center gap-2 max-w-7xl mx-auto">
-            <Radio className="w-3.5 h-3.5 text-amber-400" />
-            <span className="truncate">{lastEvent}</span>
+        <div className="border-t border-line bg-elevated text-[12px] py-1.5 px-4">
+          <div className="flex items-center gap-2 max-w-6xl mx-auto text-mute">
+            <Radio className="w-3.5 h-3.5 text-copper shrink-0" />
+            <span className="truncate font-mono">{lastEvent}</span>
           </div>
         </div>
       )}

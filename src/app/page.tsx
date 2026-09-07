@@ -8,68 +8,69 @@ export default function HomePage() {
   const router = useRouter();
 
   return (
-    <div className="space-y-12">
-      <section className="relative overflow-hidden bg-gradient-to-b from-blue-900 via-indigo-950 to-slate-900 text-white pt-14 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto relative z-10 text-center space-y-6">
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto">
-            One gateway for government service delivery
+    <div>
+      <section className="relative overflow-hidden ms-grid-bg border-b border-line">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-canvas/40 to-canvas pointer-events-none" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-20 relative">
+          <p className="ms-label mb-5">Government of Maharashtra</p>
+          <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.65rem] leading-[1.12] tracking-tight text-ink max-w-3xl">
+            One gateway.
+            <span className="italic text-mute"> Existing systems stay.</span>
           </h1>
-          <p className="text-base sm:text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            MahaSetu connects existing departmental systems so citizens apply once, share data only with consent,
-            and officers see verified records without collecting the same documents again.
+          <p className="mt-6 text-base sm:text-[17px] text-mute max-w-xl leading-relaxed">
+            MahaSetu connects departmental systems so citizens apply once, share data only with consent, and officers work from verified records instead of duplicate files.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-            <button
-              onClick={() => router.push('/register')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm"
-            >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-8">
+            <button onClick={() => router.push('/register')} className="ms-btn ms-btn-primary h-11 px-5">
               Create citizen account
               <ArrowRight className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => router.push('/login')}
-              className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold border border-white/20 text-sm"
-            >
+            <button onClick={() => router.push('/login')} className="ms-btn ms-btn-secondary h-11 px-5">
               Sign in
             </button>
           </div>
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="glass-panel p-6 sm:p-8 rounded-2xl">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">Connected departments</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 rounded-xl border border-indigo-100 bg-indigo-50/40">
-              <h3 className="font-bold text-slate-900">Revenue &amp; land records</h3>
-              <p className="text-xs text-slate-600 mt-2">Address, cadastral holding, and property-tax clearance exchanged through the revenue adapter.</p>
-            </div>
-            <div className="p-5 rounded-xl border border-emerald-100 bg-emerald-50/40">
-              <h3 className="font-bold text-slate-900">Municipal corporation</h3>
-              <p className="text-xs text-slate-600 mt-2">Trade licensing uses verified revenue clearances instead of repeated document uploads.</p>
-            </div>
-            <div className="p-5 rounded-xl border border-amber-100 bg-amber-50/40">
-              <h3 className="font-bold text-slate-900">Employment &amp; skills</h3>
-              <p className="text-xs text-slate-600 mt-2">Subsidy eligibility uses an approved trade license and domicile records already on file.</p>
-            </div>
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="flex items-end justify-between gap-4 mb-8">
+          <div>
+            <p className="ms-label mb-2">Connected now</p>
+            <h2 className="font-display text-2xl sm:text-3xl text-ink">Three systems. One consent layer.</h2>
           </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-line rounded-ms overflow-hidden border border-line">
+          {[
+            { n: '01', title: 'Revenue & land records', text: 'Address, cadastral holding, and property-tax clearance exchanged through the revenue adapter.' },
+            { n: '02', title: 'Municipal corporation', text: 'Trade licensing uses verified revenue clearances instead of repeated document uploads.' },
+            { n: '03', title: 'Employment & skills', text: 'Subsidy eligibility uses an approved trade license and domicile records already on file.' },
+          ].map((d) => (
+            <div key={d.n} className="bg-surface p-6 sm:p-8">
+              <span className="font-mono text-[11px] text-copper">{d.n}</span>
+              <h3 className="mt-3 font-medium text-ink">{d.title}</h3>
+              <p className="mt-2 text-sm text-mute leading-relaxed">{d.text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { icon: ArrowDownUp, title: 'Common data model', text: 'Department payloads are mapped into a shared model without replacing legacy systems.' },
-            { icon: Lock, title: 'Consent-based sharing', text: 'Cross-department access is purpose-bound, field-specific, time-limited, and revocable.' },
-            { icon: Radio, title: 'Unified tracking', text: 'Citizens and officers see the same application timeline with live status updates.' },
-            { icon: ShieldCheck, title: 'Audit & access control', text: 'Every exchange is hash-chained. Officers only act on applications for their department.' },
-          ].map((item) => (
-            <div key={item.title} className="p-6 rounded-xl bg-white border border-slate-200">
-              <item.icon className="w-5 h-5 text-blue-700 mb-3" />
-              <h3 className="font-bold text-slate-900 text-base mb-2">{item.title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">{item.text}</p>
-            </div>
-          ))}
+      <section className="border-t border-line bg-surface">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <p className="ms-label mb-8">How the gateway works</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              { icon: ArrowDownUp, title: 'Common data model', text: 'Department payloads are mapped into a shared model without replacing legacy systems.' },
+              { icon: Lock, title: 'Consent-based sharing', text: 'Cross-department access is purpose-bound, field-specific, time-limited, and revocable.' },
+              { icon: Radio, title: 'Unified tracking', text: 'Citizens and officers see the same application timeline with live status updates.' },
+              { icon: ShieldCheck, title: 'Audit & access control', text: 'Every exchange is hash-chained. Officers only act on applications for their department.' },
+            ].map((item) => (
+              <div key={item.title}>
+                <item.icon className="w-4 h-4 text-copper mb-3" strokeWidth={1.6} />
+                <h3 className="text-sm font-medium text-ink mb-2">{item.title}</h3>
+                <p className="text-sm text-mute leading-relaxed">{item.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
