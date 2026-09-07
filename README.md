@@ -83,3 +83,7 @@ Use the **MahaSetu assistant** (floating chat on every page) for platform help â
 | `npm run db:seed` | Departments, services, mappings, staff users |
 | `npm run test:interop` | Mapping-engine unit tests |
 | `npm run test:chatbot` | Assistant scope and intent tests |
+
+## Demo for judges
+
+See **[Demo Guide for Judges](./docs/DEMO_GUIDE_FOR_JUDGES.md)** â€” complete live-demo script, accounts, timeline, and Q&A prep for SIH presentation.
