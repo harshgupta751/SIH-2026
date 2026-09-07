@@ -35,8 +35,13 @@ export async function POST(req: Request) {
   if ('response' in auth) return auth.response;
   try {
     const body = await req.json();
+    const citizenId =
+      auth.user.role === 'CITIZEN' ? auth.user.citizenId : String(body.citizenId || auth.user.citizenId || '');
+    if (!citizenId) {
+      return NextResponse.json({ success: false, error: 'Citizen profile missing' }, { status: 400 });
+    }
     const consent = await createConsentRequest({
-      citizenId: body.citizenId || auth.user.citizenId,
+      citizenId,
       applicationId: body.applicationId,
       requestedByDept: body.requestedByDept,
       sourceDept: body.sourceDept,

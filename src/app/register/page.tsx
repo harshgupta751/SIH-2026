@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { portalPathForRole, useSession } from '@/lib/auth/use-session';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { user, status } = useSession();
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -22,6 +24,12 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (status === 'authenticated' && user) {
+      router.replace(portalPathForRole(user.role));
+    }
+  }, [status, user, router]);
+
   const set = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -31,6 +39,7 @@ export default function RegisterPage() {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, district: form.district || form.city }),
       });

@@ -3,9 +3,12 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Lock, Radio, ShieldCheck, ArrowDownUp } from 'lucide-react';
+import { portalPathForRole, useSession } from '@/lib/auth/use-session';
 
 export default function HomePage() {
   const router = useRouter();
+  const { user, status } = useSession();
+  const signedIn = status === 'authenticated' && Boolean(user?.id);
 
   return (
     <div>
@@ -21,13 +24,22 @@ export default function HomePage() {
             MahaSetu connects departmental systems so citizens apply once, share data only with consent, and officers work from verified records instead of duplicate files.
           </p>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-8">
-            <button onClick={() => router.push('/register')} className="ms-btn ms-btn-primary h-11 px-5">
-              Create citizen account
-              <ArrowRight className="w-4 h-4" />
-            </button>
-            <button onClick={() => router.push('/login')} className="ms-btn ms-btn-secondary h-11 px-5">
-              Sign in
-            </button>
+            {signedIn ? (
+              <button onClick={() => router.push(portalPathForRole(user!.role))} className="ms-btn ms-btn-primary h-11 px-5">
+                Open your portal
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <>
+                <button onClick={() => router.push('/register')} className="ms-btn ms-btn-primary h-11 px-5">
+                  Create citizen account
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button onClick={() => router.push('/login')} className="ms-btn ms-btn-secondary h-11 px-5">
+                  Sign in
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>

@@ -2,41 +2,28 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, LogOut, Menu, Radio, Sliders, User, X } from 'lucide-react';
+import { LogOut, Menu, Radio, X } from 'lucide-react';
 import BrandMark from '@/components/BrandMark';
 import ThemeToggle from '@/components/theme/ThemeToggle';
-
-type SessionUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-};
+import { useSession } from '@/lib/auth/use-session';
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const { user, status, setUser, setStatus } = useSession();
   const [sseConnected, setSseConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setUser(d.user);
-        else setUser(null);
-      })
-      .catch(() => setUser(null));
-  }, [pathname]);
 
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!user) return;
+    if (status !== 'authenticated' || !user) {
+      setSseConnected(false);
+      return;
+    }
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource('/api/events/stream');
@@ -59,20 +46,24 @@ export default function Navbar() {
     return () => {
       if (eventSource) eventSource.close();
     };
-  }, [user]);
+  }, [status, user]);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     setUser(null);
+    setStatus('anonymous');
+    setMenuOpen(false);
     router.push('/');
     router.refresh();
   };
 
+  const signedIn = status === 'authenticated' && Boolean(user?.id);
+
   const navItems = [
     { href: '/', label: 'Home', show: true },
-    { href: '/citizen', label: 'Citizen services', show: user?.role === 'CITIZEN', icon: User },
-    { href: '/department', label: 'Officer console', show: user?.role?.startsWith('OFFICER_') || user?.role === 'ADMIN', icon: Building2 },
-    { href: '/admin', label: 'Gateway admin', show: user?.role === 'ADMIN', icon: Sliders },
+    { href: '/citizen', label: 'Citizen services', show: signedIn && user?.role === 'CITIZEN' },
+    { href: '/department', label: 'Officer console', show: signedIn && (user?.role?.startsWith('OFFICER_') || user?.role === 'ADMIN') },
+    { href: '/admin', label: 'Gateway admin', show: signedIn && user?.role === 'ADMIN' },
   ];
 
   const go = (href: string) => {
@@ -112,30 +103,32 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center gap-2">
-            {user && (
+            {signedIn && (
               <div className="hidden lg:flex items-center gap-2 px-2.5 h-8 rounded-full border border-line text-[11px] text-mute">
                 <span className={`h-1.5 w-1.5 rounded-full ${sseConnected ? 'bg-success' : 'bg-warn'}`} />
                 {sseConnected ? 'Live' : 'Connecting'}
               </div>
             )}
             <ThemeToggle />
-            {user ? (
+            {signedIn ? (
               <div className="hidden sm:flex items-center gap-2">
-                <span className="text-[13px] text-mute max-w-[120px] truncate">{user.name}</span>
+                <span className="text-[13px] text-mute max-w-[120px] truncate">{user?.name}</span>
                 <button onClick={handleLogout} className="ms-btn ms-btn-ghost h-9 px-3 text-[13px]">
                   <LogOut className="w-3.5 h-3.5" />
                   Sign out
                 </button>
               </div>
-            ) : (
-              <div className="hidden sm:flex items-center gap-1.5">
+            ) : status === 'anonymous' ? (
+              <div className="flex items-center gap-1.5">
                 <button onClick={() => go('/login')} className="ms-btn ms-btn-ghost h-9 px-3 text-[13px]">
                   Sign in
                 </button>
-                <button onClick={() => go('/register')} className="ms-btn ms-btn-primary h-9 px-3 text-[13px]">
+                <button onClick={() => go('/register')} className="ms-btn ms-btn-primary h-9 px-3 text-[13px] hidden sm:inline-flex">
                   Register
                 </button>
               </div>
+            ) : (
+              <div className="h-9 w-[5.5rem] rounded-ms border border-line bg-elevated/60" aria-hidden />
             )}
             <button
               type="button"
@@ -164,11 +157,11 @@ export default function Navbar() {
                 {item.label}
               </button>
             ))}
-          {user ? (
+          {signedIn ? (
             <button onClick={handleLogout} className="w-full text-left px-3 py-2.5 rounded-ms text-sm text-mute">
               Sign out
             </button>
-          ) : (
+          ) : status === 'anonymous' ? (
             <>
               <button onClick={() => go('/login')} className="w-full text-left px-3 py-2.5 rounded-ms text-sm">
                 Sign in
@@ -177,11 +170,11 @@ export default function Navbar() {
                 Register
               </button>
             </>
-          )}
+          ) : null}
         </div>
       )}
 
-      {lastEvent && (
+      {signedIn && lastEvent && (
         <div className="border-t border-line bg-elevated text-[12px] py-1.5 px-4">
           <div className="flex items-center gap-2 max-w-6xl mx-auto text-mute">
             <Radio className="w-3.5 h-3.5 text-copper shrink-0" />

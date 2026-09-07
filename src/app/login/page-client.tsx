@@ -1,16 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { portalPathForRole, useSession } from '@/lib/auth/use-session';
+
+function safeNextPath(value: string | null) {
+  if (!value) return null;
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return null;
+  return value;
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === 'authenticated' && user) {
+      const next = safeNextPath(searchParams.get('next'));
+      router.replace(next || portalPathForRole(user.role));
+    }
+  }, [status, user, router, searchParams]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +34,7 @@ export default function LoginPage() {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
@@ -27,11 +43,9 @@ export default function LoginPage() {
         setError(data.error || 'Sign in failed');
         return;
       }
-      const next = searchParams.get('next');
+      const next = safeNextPath(searchParams.get('next'));
       if (next) router.push(next);
-      else if (data.user.role === 'CITIZEN') router.push('/citizen');
-      else if (data.user.role === 'ADMIN') router.push('/admin');
-      else router.push('/department');
+      else router.push(portalPathForRole(data.user.role));
       router.refresh();
     } catch {
       setError('Unable to sign in. Try again.');

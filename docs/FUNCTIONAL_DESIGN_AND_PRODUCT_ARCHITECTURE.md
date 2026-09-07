@@ -116,7 +116,8 @@ Seeded staff accounts are created by `node prisma/seed.js`. Citizens are never s
 ┌──────────────────────────────────────────────────────────────────────┐
 │  PRESENTATION                                                         │
 │  /  /login  /register  /citizen  /department  /admin                 │
-│  Navbar (session, SSE ticker) · Middleware (role routing)             │
+│  Navbar (session-aware chrome, theme toggle, SSE ticker)              │
+│  Light / dark theme (class strategy, persisted)                       │
 └──────────────────────────────────────────────────────────────────────┘
                               │ HTTP / EventSource
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -186,16 +187,20 @@ Admin tabs: **Field mappings**, **Schema sandbox**, **Connectors**, **Audit trai
 ### 7.1 Navbar (`src/components/Navbar.tsx`)
 
 - Brand → home  
-- Role-aware navigation (Citizen services / Officer console / Gateway admin)  
-- Sign in / Register when logged out; user name + Sign out when logged in  
-- SSE live-update indicator and event ticker when authenticated  
+- Theme toggle (light / dark, persisted in `localStorage` as `mahasetu-theme`, follows system default on first visit)  
+- Role-aware navigation only after a confirmed session (`GET /api/auth/me` must return `success` and a user `id`)  
+- Guests: **Sign in** and **Register** — **Sign out is never shown** while anonymous or while the session check is in progress  
+- Authenticated: user name + **Sign out**; SSE live-update indicator and event ticker  
+- Sign out calls `POST /api/auth/logout` and clears both Secure and non-Secure session cookies so a leftover development cookie cannot keep a guest “signed in”  
 
 ### 7.2 Home — `/`
 
 - Hero: platform value proposition  
-- CTAs: **Create citizen account** (`/register`), **Sign in** (`/login`)  
+- Guests: **Create citizen account** (`/register`), **Sign in** (`/login`)  
+- Signed-in users: **Open your portal** (citizen / officer / admin, by role) — not a second registration CTA  
 - Connected departments overview (Revenue, Municipal, Employment)  
 - Four capability cards: CDM, consent, unified tracking, audit & access control  
+- Light and dark themes; Source Serif 4 headlines, IBM Plex Sans UI, IBM Plex Mono for identifiers  
 
 No hackathon or demo content. No write operations.
 
@@ -203,8 +208,9 @@ No hackathon or demo content. No write operations.
 
 - Email + password form  
 - `POST /api/auth/login`  
+- If already authenticated, redirect to the role portal (or a same-origin `?next=` path)  
 - Redirect by role: Citizen → `/citizen`, Officer → `/department`, Admin → `/admin`  
-- Supports `?next=` return URL from middleware redirect  
+- `?next=` is accepted only when it is a relative path starting with `/` (open redirects rejected)  
 
 ### 7.4 Register — `/register`
 
@@ -212,6 +218,7 @@ No hackathon or demo content. No write operations.
 - `POST /api/auth/register`  
 - Creates user, citizen profile, and revenue connector record  
 - Auto sign-in → redirect to `/citizen`  
+- If already authenticated, redirect to the role portal instead of showing the enrolment form  
 
 ### 7.5 Citizen portal — `/citizen`
 

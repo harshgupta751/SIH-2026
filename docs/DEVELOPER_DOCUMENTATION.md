@@ -28,7 +28,8 @@ All application state (users, citizens, applications, consents, audit, events, r
 |---|---|
 | Language | TypeScript 5.6 (`strict: true`) |
 | Framework | Next.js 14.2.15 App Router |
-| UI | React 18.3, Tailwind CSS 3.4, Lucide React |
+| UI | React 18.3, Tailwind CSS 3.4 (`darkMode: 'class'`), Lucide React |
+| Fonts | Source Serif 4 (display), IBM Plex Sans (UI), IBM Plex Mono (IDs) |
 | ORM | Prisma 5.21 + `@prisma/client` |
 | Database | **PostgreSQL** (Neon, Docker, or self-hosted) — **required** |
 | Auth | scrypt password hashing + HMAC-signed `mahasetu_session` cookie |
@@ -57,9 +58,13 @@ SIH-2026/
 │   │   ├── department/         # Officer console
 │   │   ├── admin/              # Gateway admin
 │   │   └── api/                # REST + SSE (see §8)
-│   ├── components/Navbar.tsx
+│   ├── components/
+│   │   ├── Navbar.tsx
+│   │   ├── BrandMark.tsx
+│   │   └── theme/              # ThemeProvider + ThemeToggle
 │   └── lib/
-│       ├── auth/               # password, session, session-edge, guards
+│       ├── auth/               # password, session, session-edge, guards, use-session
+│       ├── cn.ts
 │       ├── db/prisma.ts
 │       ├── db/application-store.ts   # Prisma-backed app/service/mapping helpers
 │       ├── consent/consent-manager.ts
@@ -175,7 +180,10 @@ Citizen **registration** calls `upsertRevenueRecord()` so the revenue connector 
 | Session token | `lib/auth/session.ts` | HMAC-SHA256 signed JSON in `mahasetu_session` cookie |
 | Edge verification | `lib/auth/session-edge.ts` | Web Crypto (middleware-safe) |
 | API guards | `lib/auth/guards.ts` | `requireSession`, `requireRoles`, `forbidden` |
+| Client session | `lib/auth/use-session.ts` | Confirms `GET /api/auth/me` before showing authenticated chrome |
+| Logout | `POST /api/auth/logout` | Expires `mahasetu_session` (Secure and non-Secure) |
 | Route middleware | `src/middleware.ts` | Redirects unauthenticated users to `/login` |
+| Theme | `ThemeProvider` + `html.dark` | Light/dark tokens in `globals.css`; no flash via boot script |
 
 ### 6.3 Interop pipeline (`lib/interop/pipeline.ts`)
 
@@ -261,7 +269,7 @@ All protected routes require a valid `mahasetu_session` cookie unless noted. JSO
 |---|---|---|---|
 | POST | `/api/auth/register` | `fullName, email, password, mobile, address…` | Creates `User` + `Citizen` + revenue record; sets session |
 | POST | `/api/auth/login` | `email, password` | Sets `mahasetu_session` |
-| POST | `/api/auth/logout` | — | Clears session |
+| POST | `/api/auth/logout` | — | Clears session (Secure and non-Secure cookie variants) |
 | GET | `/api/auth/me` | — | Current session user or 401 |
 
 ### 8.2 Citizen
@@ -274,6 +282,7 @@ All protected routes require a valid `mahasetu_session` cookie unless noted. JSO
 | POST | `/api/applications` | `CITIZEN` — body: `{ serviceId, businessName?, tradeCategory? }` |
 | GET | `/api/applications/:id` | Owner citizen or dept officer |
 | POST | `/api/applications/:id/verify` | `CITIZEN` (owner) — runs interop pipeline |
+| POST | `/api/consents` | `CITIZEN` (own `citizenId` only), `ADMIN` |
 | POST | `/api/consents/:id/approve` | `CITIZEN` |
 | POST | `/api/consents/:id/revoke` | `CITIZEN` — `{ deny: true }` for pending → `DENIED` |
 
