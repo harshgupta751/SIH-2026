@@ -1,12 +1,9 @@
 # MahaSetu — Functional Design & Product Architecture
 
 **Product:** MahaSetu (महासेतु) — Government Digital Platform Interoperability & Unified Service Delivery System  
-**Problem Statement ID:** SIH26129  
 **Organization:** Government of Maharashtra  
-**Department:** Maharashtra State Innovation Society, Department of Skills, Employment, Entrepreneurship and Innovation  
-**Category:** Software · **Theme:** Miscellaneous  
 **Document type:** Functional Design Specification + Product Architecture  
-**Application version:** 1.0.0 (hackathon prototype)  
+**Application version:** 1.0.0 (production deployment)  
 **Codebase:** Next.js 14 App Router (`mahasetu`)
 
 ---
@@ -15,41 +12,36 @@
 
 This document describes **what the product does**, **who uses it**, **how every page and workflow behaves**, and **how the system is architected** so that existing government systems can interoperate without being replaced.
 
-It is written from the **implemented MahaSetu codebase**, aligned to SIH 26129 expected outcomes:
+It reflects the **current production implementation**: PostgreSQL persistence, real authentication, role-based access, and three live service pipelines.
 
-| SIH expected capability | How MahaSetu addresses it |
+| Capability | How MahaSetu addresses it |
 |---|---|
-| API-based exchange | Adapter layer + mock departmental REST APIs (`/api/mock/*`) |
-| Common data standards & master data | Common Data Model (CDM) + field-mapping studio |
-| Consent-based data sharing | DPDP-style consent engine (grant / deny / revoke, purpose, fields, expiry) |
-| SSO / federated identity | Role-based session API (`/api/auth/login`, `/api/auth/me`) with citizen, officer, admin personas |
-| Event-driven notifications | In-process event bus + Server-Sent Events (`/api/events/stream`) |
-| Unified application tracking | Citizen portal timeline + officer queue sharing the same application store |
-| Configurable workflow orchestration | Service-driven dependency discovery (trade license → revenue clearance) then consent → verify → dispatch → sanction |
-| Reusable connectors (legacy + modern) | `BaseAdapter` + Revenue / Municipal / Employment adapters |
-| Audit logs & RBAC | SHA-256 hash-chained audit ledger; roles CITIZEN, OFFICER_*, ADMIN |
-| Data-quality checks & exception handling | Adapter `execute()` timing/error envelope; mapping engine nested-path extraction; consent gate before interop |
-| Monitoring dashboards | Home topology, Admin adapter health/ping, latency display |
+| API-based exchange | Adapter layer + departmental connector APIs (`/api/mock/*` and in-process adapters) |
+| Common data standards & master data | Common Data Model (CDM) + persisted field-mapping studio |
+| Consent-based data sharing | DPDP-style consent engine (grant / deny / revoke, purpose, fields, expiry) stored in PostgreSQL |
+| Identity & access | Email/password registration, HMAC session cookies, role-based portal and API guards |
+| Event-driven notifications | Event bus + SSE stream + in-app notifications table |
+| Unified application tracking | Citizen timeline + officer department queue on the same PostgreSQL records |
+| Configurable workflow orchestration | Service-specific pipelines after consent → verify → officer decision |
+| Reusable connectors | `BaseAdapter` + Revenue / Municipal / Employment adapters |
+| Audit logs & RBAC | SHA-256 hash-chained audit ledger; roles `CITIZEN`, `OFFICER_*`, `ADMIN` |
+| Monitoring | Admin connector health/ping, audit trail, `/api/health` |
 
 ---
 
 ## 2. Problem statement (business context)
 
-Government departments operate independent portals, registries, and databases. They differ in:
+Government departments operate independent portals, registries, and databases with different data formats, authentication methods, and process definitions.
 
-- Data formats and identifiers  
-- Authentication methods and APIs  
-- Process definitions and ownership  
+**Consequences**
 
-**Consequences today**
+- Citizens re-submit the same proofs on every portal.  
+- No single window for application tracking.  
+- Officers lack a consolidated, verified view across departments.  
 
-- Citizens and businesses re-submit the same proofs (address, tax clearance, identity) on every portal.  
-- Applications are tracked separately; there is no single window.  
-- Officers cannot see a consolidated view of beneficiaries, applications, clearances, grievances, and outcomes.  
+**Constraint:** Interoperability must be secure and standards-based **without replacing** legacy systems.
 
-**Constraint:** Interoperability must be **secure and standards-based** and must **not replace** legacy systems.
-
-**MahaSetu product thesis:** Do not rebuild departmental websites. Sit between them as middleware: adapters speak each system’s native schema; a mapping engine normalizes to a Common Data Model; consent gates every cross-department fetch; events keep citizen and officer UIs in sync.
+**Product thesis:** MahaSetu sits between departments as middleware — adapters speak native schemas, a mapping engine normalizes to CDM, consent gates every fetch, and events keep all portals synchronized.
 
 ---
 
@@ -57,26 +49,26 @@ Government departments operate independent portals, registries, and databases. T
 
 ### 3.1 Vision
 
-A federated service-delivery layer for Maharashtra in which a citizen applies once, grants purpose-bound consent, and departments exchange verified records through reusable connectors—while each department keeps its own system of record.
+A federated service-delivery layer where citizens register once, apply for services through a single window, grant purpose-bound consent, and departments exchange verified records through reusable connectors.
 
-### 3.2 Product goals (measurable for the prototype)
+### 3.2 Product goals
 
-| Goal | Prototype demonstration |
+| Goal | Implementation |
 |---|---|
-| Fewer duplicate submissions | Trade license application does **not** re-collect address/tax PDFs; RevNet is queried after consent |
-| Reduced processing time | Interop pipeline (fetch → CDM → MuniSys) runs in milliseconds; SLA shown per service (3 / 2 / 5 days) |
-| Consistent records | Same citizen identity (`CIT-3210` / mobile `9876543210`) resolved across RevNet, CDM, and MuniSys |
-| Improved citizen experience | Single window (`/citizen`), live status stepper, SSE approval banner, printable license |
-| Cross-department coordination | Officer console shows MahaSetu verification ledger (RevNet facts inside MuniSys review) |
-| Service-level compliance visibility | Timeline stages, audit hashes, adapter latency |
+| Fewer duplicate submissions | Address/tax records fetched from Revenue connector after consent — no re-upload |
+| Reduced processing time | Adapter pipeline runs in milliseconds; SLAs shown per service |
+| Consistent records | Same citizen mobile/identity resolved across Revenue CDM and Municipal dispatch |
+| Improved citizen experience | Register → apply → consent → track → certificate print |
+| Cross-department coordination | Officer console shows linked clearances before sanction |
+| Compliance visibility | Timeline, audit hash chain, consent purpose and field list |
 
-### 3.3 Non-goals (prototype scope)
+### 3.3 Non-goals (current release)
 
-- Production Aadhaar/DigiLocker federation ( DigiLocker is **shown as linked**, not integrated).  
-- Real Kafka cluster, Redis cache, or Neon DB as the **runtime** application store (Prisma/Postgres exist for schema + seed; live APIs use in-memory stores).  
-- Full RBAC enforcement on every API (roles exist; most APIs are open for demo).  
-- Complete skill-subsidy application journey (Employment adapter and schemes exist; the killer path is **Municipal Trade License**).  
-- Multi-tenant production SSO (OAuth2/OIDC with IdP). Login is a **mock federated identity** API.
+- Live Aadhaar / DigiLocker / ePramaan federation (OIDC SSO is a future integration).  
+- Replacing departmental systems of record (connectors simulate legacy APIs).  
+- Kafka / Redis-backed event mesh (in-process bus + Postgres `Event` table).  
+- Grievance management and full beneficiary 360° dashboard.  
+- Multi-state deployment (configured for Maharashtra departments in seed data).
 
 ---
 
@@ -84,681 +76,372 @@ A federated service-delivery layer for Maharashtra in which a citizen applies on
 
 ### 4.1 Personas
 
-| Persona | Demo identity | Primary portal | Intent |
+| Persona | Access | Primary portal | Intent |
 |---|---|---|---|
-| **Citizen** | Rahul Sharma, `CIT-3210`, Pune, mobile `9876543210` | `/citizen` | Apply for services, grant/deny consent, track applications, download license |
-| **Municipal officer** | Manoj Kulkarni, Ward 14 Licensing | `/department` (Municipal tab) | Review pre-verified files, sanction or reject trade licenses |
-| **Revenue officer** | Sunita Patil (login API) / RevNet query UI | `/department` (Revenue tab) | Look up cadastral / tax records in legacy schema |
-| **Gateway administrator** | Dr. Alok Verma (login API) | `/admin` | Field mappings, schema sandbox, adapter health, audit trail |
-| **Evaluator / jury** | — | `/` and `/demo` | Understand topology and 10-step interop story |
+| **Citizen** | Self-registration | `/register` → `/citizen` | Apply, grant consent, track, download certificate |
+| **Municipal officer** | Seeded account | `/department` | Review license applications with revenue clearance |
+| **Revenue officer** | Seeded account | `/department` | Review address clearances; query revenue records |
+| **Employment officer** | Seeded account | `/department` | Review subsidy applications |
+| **Gateway administrator** | Seeded account | `/admin` | Mappings, sandbox, connector health, audit |
 
-### 4.2 Roles (data model)
+### 4.2 Roles
 
-Stored conceptually on `User.role`:
+| Role | Portal access |
+|---|---|
+| `CITIZEN` | `/citizen` |
+| `OFFICER_MUNICIPAL` | `/department` (municipal queue) |
+| `OFFICER_REVENUE` | `/department` (revenue queue + record lookup) |
+| `OFFICER_EMPLOYMENT` | `/department` (employment queue) |
+| `ADMIN` | `/admin` (+ can view department console) |
 
-- `CITIZEN`  
-- `OFFICER_MUNICIPAL`  
-- `OFFICER_REVENUE`  
-- `OFFICER_EMPLOYMENT`  
-- `ADMIN`  
+### 4.3 Authentication & RBAC
 
-Login (`POST /api/auth/login`) currently materializes: CITIZEN, OFFICER_MUNICIPAL, OFFICER_REVENUE, ADMIN. Cookies: `mahasetu_role`, `mahasetu_user`. Default session if no cookie: citizen Rahul Sharma.
+| Layer | Behaviour |
+|---|---|
+| **Registration** | `/register` creates `User` + `Citizen` + revenue connector enrolment |
+| **Login** | `/login` with email/password → `mahasetu_session` HTTP-only cookie |
+| **Middleware** | Unauthenticated users redirected to `/login` for protected pages |
+| **API guards** | Each route enforces role (e.g. only `CITIZEN` can apply; officers scoped to their department) |
+| **SSE** | Authenticated stream; citizens receive only their own events |
 
-### 4.3 RBAC (intended vs implemented)
-
-| Capability | Intended | Implemented in UI/API |
-|---|---|---|
-| Citizen apply / consent | Citizen only | Citizen portal; APIs not locked |
-| Approve / reject license | Municipal officer | Department portal buttons; `/api/applications/:id/approve|reject` |
-| Query RevNet | Revenue officer / adapters | Department Revenue tab + mock APIs |
-| Mapping / audit / ping | Admin | Admin studio |
-| Cross-dept fetch | System after GRANTED consent | Enforced in `/api/applications/:id/verify` (HTTP 403 if consent not GRANTED) |
+Seeded staff accounts are created by `node prisma/seed.js`. Citizens are never seeded — they self-register.
 
 ---
 
 ## 5. Product architecture
 
-### 5.1 Logical architecture (layers)
+### 5.1 Logical architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  PRESENTATION                                                            │
-│  /  Overview   /demo  Killer Demo   /citizen   /department   /admin     │
-│  Navbar (SSE ticker) · Global layout · Tailwind UI                       │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │ HTTP / EventSource
-┌─────────────────────────────────────────────────────────────────────────┐
-│  UNIFIED SERVICE GATEWAY (Next.js API routes)                            │
-│  Applications · Consents · Auth · Services · Departments                 │
-│  Integrations / mappings / ping · Audit · SSE stream                     │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────────────┐
-│  MAHASETU CORE                                                           │
-│  Consent Manager · Application Store · Audit Logger (SHA-256 chain)      │
-│  Reactive Event Bus · Data Mapping Engine · Integration Registry         │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │ Adapters (do not rewrite departments)
-┌──────────────┬─────────────────────┬────────────────────────────────────┐
-│ RevenueAdapter│ MunicipalAdapter    │ EmploymentAdapter                   │
-│ → RevNet      │ → MuniSys           │ → KaushalPortal                     │
-│ /api/mock/    │ /api/mock/municipal │ /api/mock/employment                │
-│ revenue       │                     │                                    │
-└──────────────┴─────────────────────┴────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  PRESENTATION                                                         │
+│  /  /login  /register  /citizen  /department  /admin                 │
+│  Navbar (session, SSE ticker) · Middleware (role routing)             │
+└──────────────────────────────────────────────────────────────────────┘
+                              │ HTTP / EventSource
+┌──────────────────────────────────────────────────────────────────────┐
+│  API GATEWAY (Next.js route handlers)                                 │
+│  Auth · Applications · Consents · Services · Integrations · Audit     │
+└──────────────────────────────────────────────────────────────────────┘
+                              │
+┌──────────────────────────────────────────────────────────────────────┐
+│  MAHASETU CORE                                                        │
+│  Interop Pipeline · Consent Manager · Mapping Engine · Event Bus      │
+│  Audit Logger · Application Store (Prisma)                          │
+└──────────────────────────────────────────────────────────────────────┘
+                              │ Adapters
+┌──────────────┬─────────────────────┬─────────────────────────────────┐
+│ Revenue      │ Municipal           │ Employment                       │
+│ (RevNet)     │ (MuniSys)           │ (KaushalPortal)                  │
+│ Postgres +   │ Postgres +          │ In-memory schemes                │
+│ mock API     │ mock API            │ mock API                         │
+└──────────────┴─────────────────────┴─────────────────────────────────┘
 ```
 
-### 5.2 Heterogeneous systems (simulated legacy)
+### 5.2 Department connectors
 
-| System | Department | Native schema examples | Responsibilities |
-|---|---|---|---|
-| **RevNet** | Revenue & Land Records | `citizen.fullName`, `address_record.city_name`, `property_tax_cleared` | Property/address, cadastral area, tax clearance |
-| **MuniSys** | Municipal Corporation | `applicant_name`, `premises_address`, `revenue_clearance_ref` | Trade licensing, ward, officer sanction |
-| **KaushalPortal** | Employment & Skill | `candidate_profile.legal_name`, `scheme_eligibility.max_grant_inr` | PMEGP / Mudra schemes, eligibility |
+| System | Department | Native schema examples |
+|---|---|---|
+| **RevNet** | Revenue & Land Records | `citizen.fullName`, `address_record.city_name`, `property_tax_cleared` |
+| **MuniSys** | Municipal Corporation | `applicant_name`, `premises_address`, `revenue_clearance_ref` |
+| **KaushalPortal** | Employment & Skills | `candidate_profile.legal_name`, `scheme_eligibility.max_grant_inr` |
 
-Each mock is an **independent in-memory backend** with its own identifiers and JSON shape. MahaSetu never requires them to share a database.
+Revenue and Municipal connector state persists in PostgreSQL (`RevenueCitizenRecord`, `MunicipalPermit`). Citizen registration automatically enrols the citizen in the revenue connector.
 
 ### 5.3 Common Data Model (CDM)
 
-Canonical citizen record used between adapters (`CommonCitizenRecord`):
+Canonical record (`CommonCitizenRecord`): identity, address, and clearances (`revenueReferenceId`, `propertyTaxCleared`, etc.). All cross-department exchange passes through CDM.
 
-- Identity: `citizenId`, `name`, `mobile`, `email?`, `identityHash`  
-- Address: `line1`, `locality`, `city`, `district`, `state`, `postalCode`, `fullFormattedAddress`  
-- Clearances: `revenueVerified`, `revenueReferenceId`, `propertyTaxCleared`, `landHoldingSqft`, `municipalVerified`, `municipalPermitNumber`, `employmentEligible`, `schemeCode`  
+### 5.4 Deployment architecture
 
-**Master-data idea in the prototype:** services, departments, and field mappings act as configurable catalogues. Citizen “golden” demo record is Rahul Sharma / CIT-3210.
-
-### 5.4 Bidirectional mapping (core product capability)
-
-```
-RevNet JSON  →  RevenueAdapter  →  DataMappingEngine.transformRevenueToCDM()
-                                      ↓
-                               CommonCitizenRecord
-                                      ↓
-              DataMappingEngine.transformCDMToMunicipal()  →  MunicipalAdapter  →  MuniSys JSON
-```
-
-Generic rule execution: `DataMappingEngine.executeMapping(sourceData, rules)` used by Admin **Schema Sandbox**.
-
-Transformations defined: `DIRECT`, `TO_UPPER`, `CONCAT_ADDRESS`, `BOOLEAN_FLAG`, `FORMAT_MOBILE`. Runtime generic mapper applies `TO_UPPER` and `BOOLEAN_FLAG`; revenue→CDM also concatenates address and generates `REV-CLR-*` clearance IDs.
-
-### 5.5 Physical / deployment architecture
-
-| Component | Prototype choice |
+| Component | Choice |
 |---|---|
-| App runtime | Node.js, Next.js 14 (`npm run dev` / `next start`) |
-| UI | React 18 client pages (`'use client'`), Tailwind CSS, Lucide icons |
-| Persistence (schema) | Prisma + PostgreSQL (`prisma/schema.prisma`); Docker Compose Postgres 15 + Redis 7 |
-| Persistence (live demo) | Process-global in-memory stores (survive HMR via `globalThis` singletons) |
-| Real-time | SSE (`text/event-stream`), 15s heartbeat |
-| Crypto | Node `crypto` SHA-256 for audit chain; mock consent signature hashes |
-| Config | `.env` `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `NODE_ENV` |
-
-`reactStrictMode` is **false** to avoid duplicate SSE connections in development.
-
-### 5.6 Architectural principles
-
-1. **Leave legacy intact** — adapters call mock departmental APIs/services; departments keep idiosyncratic JSON.  
-2. **Normalize at the edge of MahaSetu** — CDM is the contract, not RevNet or MuniSys.  
-3. **Consent before fetch** — verify pipeline refuses exchange until consent is `GRANTED`.  
-4. **Events as the coordination fabric** — create, consent, fetch, dispatch, approve/reject all publish typed events.  
-5. **Non-repudiation** — every sensitive action can be hashed into a chain (`prevHash` → `hash`).  
-6. **Demo-first observability** — topology, payload inspector, sandbox, ping, audit UI.
+| Runtime | Node.js + Next.js 14 |
+| Database | PostgreSQL (Neon recommended for cloud) |
+| ORM | Prisma |
+| Sessions | HMAC-signed cookie (`SESSION_SECRET`) |
+| Real-time | SSE with 15s heartbeat |
+| Health | `GET /api/health` |
 
 ---
 
 ## 6. Information architecture (sitemap)
 
-Global chrome: **Navbar** (brand MahaSetu / SIH26129, tricolor bar, role tabs, Event Mesh live indicator, floating event ticker) + **footer** (platform credit and department triangle).
+| Route | Page | Audience | Auth |
+|---|---|---|---|
+| `/` | Public home — platform overview | Everyone | Public |
+| `/login` | Sign in | Everyone | Public |
+| `/register` | Citizen registration | New citizens | Public |
+| `/citizen` | Citizen services portal | Citizens | `CITIZEN` |
+| `/department` | Officer console | Officers, Admin | `OFFICER_*`, `ADMIN` |
+| `/admin` | Gateway administration | Administrators | `ADMIN` |
 
-| Route | Page name | Audience |
-|---|---|---|
-| `/` | Overview & live topology | All |
-| `/demo` | Killer Demo walkthrough | Jury / trainers |
-| `/citizen` | Citizen Portal | Citizen |
-| `/department` | Officer Verification & Interop Studio | Officers |
-| `/admin` | Gateway Middleware & Schema Studio | Admin |
-
-There are no nested app routes beyond these five pages. All other surfaces are **modals** (apply, certificate) or **tabs** (department Municipal/Revenue; admin Mappings/Sandbox/Adapters/Audit).
+Modals on citizen portal: **Apply for service**, **View certificate**.  
+Admin tabs: **Field mappings**, **Schema sandbox**, **Connectors**, **Audit trail**.
 
 ---
 
 ## 7. Page-level functional specification
 
-### 7.1 Shared: Navbar (`src/components/Navbar.tsx`)
+### 7.1 Navbar (`src/components/Navbar.tsx`)
 
-**Features**
+- Brand → home  
+- Role-aware navigation (Citizen services / Officer console / Gateway admin)  
+- Sign in / Register when logged out; user name + Sign out when logged in  
+- SSE live-update indicator and event ticker when authenticated  
 
-- Brand click → `/`  
-- Navigation: Overview, Citizen Portal (badge “Rahul”), Department Portal (badge “Officer”), Interop Admin (badge “Gateway”), Killer Demo (highlighted)  
-- Active route styling  
-- Opens `EventSource('/api/events/stream')`  
-  - On open: “Event Mesh Live”  
-  - On message: ticker `eventType` + truncated `summary` for 6 seconds  
-  - On error: “Connecting…”  
+### 7.2 Home — `/`
 
-**Business logic:** Cross-cutting awareness of the event mesh so evaluators see live interop even while switching portals.
+- Hero: platform value proposition  
+- CTAs: **Create citizen account** (`/register`), **Sign in** (`/login`)  
+- Connected departments overview (Revenue, Municipal, Employment)  
+- Four capability cards: CDM, consent, unified tracking, audit & access control  
 
----
+No hackathon or demo content. No write operations.
 
-### 7.2 Overview — `/` (`src/app/page.tsx`)
+### 7.3 Login — `/login`
 
-**Purpose:** Position MahaSetu as middleware, not another citizen portal.
+- Email + password form  
+- `POST /api/auth/login`  
+- Redirect by role: Citizen → `/citizen`, Officer → `/department`, Admin → `/admin`  
+- Supports `?next=` return URL from middleware redirect  
 
-**Sections and functions**
+### 7.4 Register — `/register`
 
-1. **Hero**  
-   - SIH26129 badge, title, value proposition (“We do not rebuild government websites. We bridge them.”)  
-   - CTAs: Launch Killer Demo → `/demo`; Citizen Portal → `/citizen`; Admin & Schema Studio → `/admin`  
+- Full citizen enrolment: name, email, password (min 8 chars), mobile (10 digits), full address, optional Aadhaar (stored as hash only)  
+- `POST /api/auth/register`  
+- Creates user, citizen profile, and revenue connector record  
+- Auto sign-in → redirect to `/citizen`  
 
-2. **Live Distributed Interoperability Topology**  
-   - On load: `GET /api/integrations` (health of three adapters; UI currently shows static 38/42/35 ms and “All 3 Adapters Online”).  
-   - Three department cards: RevNet, MuniSys, KaushalPortal with **idiosyncratic schema snippets**.  
-   - Central CDM engine strip: JSONPath mapper, DPDP consent guard, reactive SSE mesh.  
+### 7.5 Citizen portal — `/citizen`
 
-3. **Four feature pillars**  
-   Dynamic Data Mapping · DPDP Consent Manager · Reactive Event Bus · Tamper-Evident Audit  
+**Data load (authenticated)**
 
-4. **Comparison table**  
-   Siloed portals vs MahaSetu on verification, formats, privacy, tracking.  
+- `GET /api/citizens/me` — profile and notifications  
+- `GET /api/services` — service catalogue from PostgreSQL  
+- `GET /api/applications` — citizen's own applications  
+- SSE on `/api/events/stream` for approval/rejection updates  
 
-**Business rules:** Marketing/education only; no write operations.
+**Profile header**
 
----
+- Name, verified badge, email, mobile, registered address  
 
-### 7.3 Killer Demo — `/demo` (`src/app/demo/page.tsx`)
+**Consent banner**
 
-**Purpose:** Narrated 10-step interoperability story with payload inspector.
+Shown when an application is `CONSENT_PENDING` with a `PENDING` consent.
 
-**Controls**
+| Action | Result |
+|---|---|
+| Grant consent | `POST /api/consents/:id/approve` then `POST /api/applications/:id/verify` (runs interop pipeline) |
+| Deny | `POST /api/consents/:id/revoke` with `{ deny: true }` → status `DENIED` |
 
-- Auto-Play (3.2s per step) / Pause  
-- Next Step (disabled at 10 or while playing)  
-- Reset to step 1  
-- Click any step chip to jump  
+**Services grid**
 
-**Ten steps (product storyboard)**
+| Code | Name | Department | SLA | Fee |
+|---|---|---|---|---|
+| `BUSINESS_LICENSE` | Municipal trade & business license | Municipal | 3 days | ₹1200 |
+| `ADDRESS_VERIFICATION` | Residential land record & address clearance | Revenue | 2 days | Free |
+| `SKILL_SUBSIDY` | MSME enterprise & skill subsidy | Employment | 5 days | Free |
 
-| Step | Title | Actor | What the product claims happens |
-|---|---|---|---|
-| 1 | Citizen Login | Rahul Sharma | DigiLocker-verified session, profile CIT-3210 |
-| 2 | Apply for Business License | Citizen Portal | Application `MH-MUNI-2026-10231` for Rahul Enterprises |
-| 3 | Dependency Discovery & DPDP Consent | Gateway | Trade license requires RevNet address + tax; consent UI |
-| 4 | Citizen Grants Data Consent | Rahul | Signed consent stored + audited |
-| 5 | RevNet API Query | RevenueAdapter | Legacy JSON for mobile 9876543210 |
-| 6 | Dynamic Data Mapping to CDM | Mapping Engine | Nested fields → CDM |
-| 7 | MuniSys Dispatch | MunicipalAdapter | Target schema + `REV-CLR-*` |
-| 8 | Officer Cross-Department Inspection | M. Kulkarni | Ledger instead of physical docs |
-| 9 | Officer Sanctions License | MuniSys + Event Bus | Permit + `APPLICATION_APPROVED` |
-| 10 | Real-Time SSE Citizen Sync | SSE | Dashboard → Approved; certificate ready |
+**Apply modal**
 
-**Live Schema Transformation Inspector (three columns)**
+- Business license: business name + trade category required  
+- Other services: uses citizen name; subsidy blocked until an approved trade license exists  
+- `POST /api/applications` with `serviceId` — orchestrator selects correct consent and pipeline  
 
-1. RevNet raw JSON (highlights from step 5)  
-2. MahaSetu CDM (from step 6)  
-3. MuniSys dispatched JSON (from step 7)  
+**Application tracking**
 
-Payloads are **curated demo fixtures** (not live API calls on this page).
+- Status badges: Awaiting consent, Officer review, Approved, Rejected  
+- Four-step progress: Submitted → Consent → Department records → Decision  
+- Timeline from `ApplicationTimeline` records  
+- Approved applications: **View certificate** modal with print  
 
-**Dual preview**
+### 7.6 Officer console — `/department`
 
-- Left: Citizen view status machine — Draft → Awaiting Consent (step ≥3) → Municipal Officer Review (step ≥7) → Approved (step 10); revenue ref from step 5; permit `MH-PUNE-MUNI-LIC-4412` at step 10.  
-- Right: Officer console — pre-verified MahaSetu data; approve affordance active from step 9.  
+**Queue:** `GET /api/applications` filtered to the officer's department (or all for Admin).
 
-**Business logic:** This page is **simulation/education**. The **executable** workflow lives on `/citizen` + `/department`.
+**Application detail**
 
----
+- Applicant name and mobile from database  
+- Cross-department verification panel: revenue clearance ref, municipal permit ref, status  
+- Officer remarks textarea  
+- **Sanction** → `POST /api/applications/:id/approve` (only when `PENDING_OFFICER_REVIEW`)  
+- **Reject** → `POST /api/applications/:id/reject`  
 
-### 7.4 Citizen Portal — `/citizen` (`src/app/citizen/page.tsx`)
+**Revenue record lookup** (Revenue officer / Admin)
 
-**Purpose:** Single-window service delivery for the verified citizen.
+- Search by mobile → `GET /api/mock/revenue/citizens/:mobile`  
+- Displays raw legacy JSON schema  
 
-#### 7.4.1 Data load
+### 7.7 Gateway admin — `/admin`
 
-On mount (and refresh / SSE-triggered reload):
-
-- `GET /api/citizens/me` → profile  
-- `GET /api/services` → catalogue  
-- `GET /api/applications?citizenId=CIT-3210` → applications  
-- If any application `status === CONSENT_PENDING`, `GET /api/applications/:id` and if consent `PENDING`, show consent banner  
-
-SSE: reload on `APPLICATION_APPROVED` (celebration banner), `REVENUE_FETCHED`, `MUNICIPAL_DISPATCHED`.
-
-#### 7.4.2 Profile header
-
-- Display name (API or fallback “Rahul Sharma”), Verified Citizen badge  
-- Citizen ID `CIT-3210`, mobile, “DigiLocker Linked”  
-- Official registered address (Revenue records copy)  
-
-#### 7.4.3 Consent authorization banner (DPDP Act 2023)
-
-Shown when `activeConsent` is set.
-
-**Displays:** requesting department, source department, application id, requested `dataFields` chips.
-
-**Actions**
-
-| Action | API | Follow-on |
-|---|---|---|
-| Grant DPDP Consent | `POST /api/consents/:id/approve` then `POST /api/applications/:applicationId/verify` | Clears banner; success alert with revenue reference from pipeline telemetry |
-| Deny | `POST /api/consents/:id/revoke` | Clears banner, reloads list |
-
-**Business rule:** Granting consent is what **unlocks** RevNet fetch and MuniSys dispatch. Deny/revoke uses the revoke endpoint (status becomes `REVOKED`).
-
-#### 7.4.4 Government services grid
-
-Each card from `applicationStore` services:
-
-| Code | Name | Department | SLA | Fee | Interop requirement (copy) |
-|---|---|---|---|---|---|
-| `BUSINESS_LICENSE` | Municipal Trade & Business License | MuniSys | 3 days | ₹1200 | Revenue address & property tax clearance |
-| `ADDRESS_VERIFICATION` | Official Residential & Land Record Verification | RevNet | 2 days | Free | Revenue Inspector digital sign-off |
-| `SKILL_SUBSIDY` | MSME Youth Enterprise & Skill Subsidy | KaushalPortal | 5 days | Free | Verified trade license + domicile |
-
-**Apply Now** opens modal. **Implemented apply POST always sends** `serviceId` from selected card (or `BUSINESS_LICENSE`), **`departmentId: 'MUNICIPAL'`**, citizen `CIT-3210`, business name, trade category. The orchestrated interop path is therefore the **trade-license / municipal** path even if another card is selected (prototype limitation; product intent is service-specific orchestration).
-
-#### 7.4.5 Apply modal
-
-Fields:
-
-- Business / Establishment Name (required, default `Rahul Enterprises`)  
-- Trade Category: `COMMERCIAL_RETAIL` | `IT_AND_COMMUNICATIONS` | `FOOD_AND_BEVERAGE` | `MANUFACTURING_SMALL`  
-- Notice: submission will discover Revenue dependency and prompt DPDP consent  
-
-Submit: `POST /api/applications`. On success, close modal; if `consentRequired`, set `activeConsent` from `consentRequest`.
-
-#### 7.4.6 Application tracking
-
-Empty state: prompt to apply.
-
-Each application card:
-
-- Application number, status badge mapping:  
-  - `APPROVED` → Approved ✅  
-  - `PENDING_OFFICER_REVIEW` → Municipal Officer Review 🟡  
-  - `CONSENT_PENDING` → Awaiting Consent ⏳  
-  - else raw status  
-- Business name and trade category  
-- Applied date  
-- If approved: **View Trade License**  
-
-**Five-step visual pipeline**
-
-1. Application — always complete after create  
-2. Citizen Consent — pending while `CONSENT_PENDING`, else authorized  
-3. RevNet Check — complete if `revenueClearanceRef` present  
-4. MuniSys Review — pending officer vs approved  
-5. Trade License — issued iff `APPROVED`  
-
-**Live event log:** `app.timeline[]` details + actor.
-
-#### 7.4.7 Trade license certificate modal
-
-Statutory-style certificate:
-
-- Municipal Corporation of Pune  
-- Certificate No = `municipalPermitRef`  
-- Licensee Rahul Sharma, establishment, premises, revenue clearance ref, officer M. Kulkarni  
-- Print / Save (`window.print()`)  
-
----
-
-### 7.5 Department Portal — `/department` (`src/app/department/page.tsx`)
-
-**Purpose:** Officer operations with **cross-department verification ledger**.
-
-Header: logged in as Manoj Kulkarni (Municipal). Role switcher: **Municipal Dept (MuniSys)** | **Revenue Dept (RevNet)**.
-
-SSE reload on `APPLICATION_CREATED`, `MUNICIPAL_DISPATCHED`, `APPLICATION_APPROVED`.
-
-#### 7.5.1 Municipal view
-
-**Queue (left):** `GET /api/applications` (all applications, not filtered by department). Click to select. Shows number, status, business name, revenue check Clear/Pending.
-
-**Detail (right):**
-
-- Ward 14 review header  
-- **MahaSetu Cross-Department Verification Ledger** (hero feature):  
-  - Applicant name (CDM) — demo copy “Rahul Sharma”  
-  - Revenue clearance reference (from application or fallback `REV-CLR-990142`)  
-  - Verified cadastral address  
-  - Property tax arrears CLEARED  
-  - Land holding 1,200 sq.ft.  
-- Officer notes textarea (default statutory comment)  
-- **Reject Application** → `POST /api/applications/:id/reject` `{ reason, officerName }`  
-- **Sanction Trade License** → `POST /api/applications/:id/approve` `{ comments, officerName: 'M. Kulkarni (Ward 14 Licensing)' }`  
-- Both disabled while processing or if already `APPROVED`  
-
-**Business rules**
-
-- Officer does not re-verify address by asking for PDFs; ledger is the interop proof.  
-- Success banner shows generated `licenseNumber`.  
-
-#### 7.5.2 Revenue view (RevNet)
-
-Simulated **legacy officer workstation**:
-
-- Search by mobile (default `9876543210`)  
-- `GET /api/mock/revenue/citizens/:mobile`  
-- Shows name, verification_status, house/locality, city/district, tax cleared/pending  
-- **Raw idiosyncratic JSON** for teaching schema mismatch  
-
-No write operations on RevNet from this UI.
-
----
-
-### 7.6 Interop Admin — `/admin` (`src/app/admin/page.tsx`)
-
-**Purpose:** Configure and observe the middleware.
-
-Loads: `GET /api/integrations`, `GET /api/integrations/mappings`, `GET /api/audit-logs`.
-
-#### Tab: Field Mapping Studio
-
-- Table of rules: id, source system, source JSON path, target system, target field, transformation  
-- **Register New Schema Mapping Rule** (client-side append only in current UI): source RevNet / MahaSetu_CDM / KaushalPortal; target MahaSetu_CDM / MuniSys; paths; submit adds `FMP-0N` locally  
-
-**Intended product behavior:** persist via store `addFieldMapping`. **Implemented UI:** does not call PUT/POST for new rules (sandbox POST uses existing store rules).
-
-#### Tab: Schema Sandbox
-
-- Paste RevNet-like JSON (default Ananya Deshpande sample)  
-- **Execute Translation** → `POST /api/integrations/mappings` `{ sourceData }` using stored rules  
-- Right pane: normalized object  
-
-#### Tab: Connected Adapters
-
-- Cards per integration: department code, latency, system name, endpoint, HEALTHY & CONNECTED  
-- **Ping Adapter** → `POST /api/integrations/test` `{ departmentCode }` then refresh  
-
-#### Tab: Cryptographic Audit Trail
-
-- List: id, action, actor role/id, time, purpose, department, `hash`, `prevHash`  
+| Tab | Function |
+|---|---|
+| Field mappings | View rules from DB; add new rules via `POST /api/integrations/mappings` |
+| Schema sandbox | Paste JSON → `POST /api/integrations/mappings` with `sourceData` → view CDM output |
+| Connectors | Adapter health cards; **Ping** updates latency in DB |
+| Audit trail | Hash-chained log entries with `prevHash` and `hash` |
 
 ---
 
 ## 8. End-to-end workflows
 
-### 8.1 Primary workflow: Trade license via interoperability (killer path)
+### 8.1 Business license (primary path)
 
 ```
-Citizen Apply
-    → Application CONSENT_PENDING + Consent PENDING
-    → Event APPLICATION_CREATED + Audit APPLICATION_CREATED
-Citizen Grant Consent
-    → Consent GRANTED + Timeline CONSENT_GRANTED
-    → Event CONSENT_GRANTED + Audit CONSENT_GRANTED
-Verify pipeline (gated)
-    → RevenueAdapter.fetchAndNormalizeCitizen('9876543210')
-    → Event REVENUE_FETCHED
-    → Event DATA_NORMALIZED
-    → MunicipalAdapter.submitTradeLicenseApplication(CDM, business, category)
-    → Event MUNICIPAL_DISPATCHED
-    → Application PENDING_OFFICER_REVIEW + revenueClearanceRef + municipalPermitRef
-    → Timeline REVENUE_VERIFIED, ADAPTER_TRANSLATED
-    → Audit CROSS_DEPT_INTEROP_EXECUTION
-Officer Sanction
-    → municipalAdapter.approveTradeApplication
-    → Application APPROVED + license number
-    → Event APPLICATION_APPROVED → Citizen SSE banner
-    → Audit APPLICATION_APPROVED
+Citizen registers → applies for BUSINESS_LICENSE
+  → Application CONSENT_PENDING + Consent PENDING (MUNICIPAL requests REVENUE data)
+Citizen grants consent
+  → Consent GRANTED + timeline event
+Verify pipeline
+  → RevenueAdapter.fetchAndNormalizeCitizen(citizen.mobile)
+  → CDM normalization
+  → MunicipalAdapter.submitTradeLicenseApplication(CDM, business, category)
+  → Application PENDING_OFFICER_REVIEW
+Municipal officer sanctions
+  → Application APPROVED + license reference
+  → SSE APPLICATION_APPROVED → citizen notification
 ```
 
-### 8.2 Consent denial / revocation
+### 8.2 Address verification
 
-Citizen Deny → `revokeConsent` → Event `CONSENT_REVOKED` → Audit. Verify API continues to block if consent exists and is not `GRANTED`.
+```
+Citizen applies for ADDRESS_VERIFICATION
+  → Consent (REVENUE self-access for land-record extract)
+Grant + verify
+  → Revenue fetch + CDM → PENDING_OFFICER_REVIEW
+Revenue officer sanctions
+  → APPROVED with clearance reference
+```
 
-### 8.3 Officer rejection
+### 8.3 Skill subsidy
 
-`POST .../reject` → MuniSys reject → status `REJECTED` → timeline ERROR → Event `APPLICATION_REJECTED` → Audit.
+```
+Prerequisite: approved BUSINESS_LICENSE for same citizen
+Citizen applies for SKILL_SUBSIDY
+  → Consent (EMPLOYMENT requests MUNICIPAL trade-license data)
+Grant + verify
+  → EmploymentAdapter.checkEligibility(mobile, hasTradeLicense=true)
+  → PENDING_OFFICER_REVIEW
+Employment officer sanctions
+  → APPROVED with subsidy reference
+```
 
-### 8.4 Revenue record lookup (legacy system still works)
+### 8.4 Consent denial
 
-Officer switches to Revenue tab → query RevNet by mobile → native JSON. Demonstrates **federated** access: MahaSetu does not replace RevNet UI; it also exposes it.
+Citizen denies → consent `DENIED` → verify blocked (403) until a new consent flow is initiated.
 
-### 8.5 Admin mapping experiment
+### 8.5 Officer rejection
 
-Paste JSON → executeMapping → inspect CDM-like object. Ping adapters for HEALTHY/DOWN + latency.
-
-### 8.6 Mock identity (SSO stand-in)
-
-`POST /api/auth/login` `{ role }` returns mock JWT string and sets cookies. `GET /api/auth/me` reads cookie or defaults to citizen. Portals currently **hard-code persona copy** rather than switching UI from this API (login is available for future wiring).
+Officer rejects → `REJECTED` status → timeline error entry → SSE `APPLICATION_REJECTED` → citizen notification.
 
 ---
 
-## 9. Business rules and requirements (detailed)
+## 9. Business rules
 
 ### 9.1 Application lifecycle
 
-| Status | Meaning | Typical next action |
-|---|---|---|
-| `DRAFT` | Schema-supported; not used on create | — |
-| `CONSENT_PENDING` | Created; waiting DPDP grant | Grant or deny consent |
-| `REVENUE_VERIFIED` | Schema-supported | Pipeline currently jumps to officer review after verify |
-| `PENDING_OFFICER_REVIEW` | In MuniSys queue | Approve or reject |
-| `APPROVED` | License number issued | View certificate |
-| `REJECTED` | Officer declined | Citizen sees status |
+| Status | Meaning |
+|---|---|
+| `CONSENT_PENDING` | Waiting for citizen consent |
+| `PENDING_OFFICER_REVIEW` | Interop complete; awaiting officer |
+| `APPROVED` | Sanctioned; certificate available |
+| `REJECTED` | Declined by officer |
 
-Create always starts at `CONSENT_PENDING`. Application numbers: `MH-MUNI-2026-{10000–99999}`.
+Application numbers: `MH-MUNI-YYYY-*`, `MH-REV-YYYY-*`, `MH-EMP-YYYY-*`.
 
-### 9.2 Service catalogue rules (seed + in-memory)
+### 9.2 Consent rules
 
-| Service | Required clearances (Prisma JSON / store copy) | Fee | SLA days |
-|---|---|---|---|
-| Business license | `REVENUE_ADDRESS_AND_TAX_CLEARANCE` | 1200 | 3 |
-| Address verification | `REVENUE_TITLE_CLEARANCE` | 0 | 2 |
-| Skill subsidy | `TRADE_LICENSE`, `DOMICILE_CERTIFICATE` | 0 | 5 |
-
-**Create-application orchestrator (current code):** always creates Municipal consent request (MUNICIPAL ← REVENUE) with fields `name`, `address`, `property_tax_cleared`, `land_holding_sqft`.
-
-### 9.3 Consent rules (DPDP-aligned prototype)
-
-- Purpose-bound string  
-- Granular `dataFields`  
+- Purpose-bound, field-specific, 30-day expiry  
 - Status: `PENDING` | `GRANTED` | `DENIED` | `REVOKED`  
-- Expiry: 30 days from create  
-- Signature: mock `sha256_*` hash  
-- Interop **must not** run if a linked consent exists and status ≠ `GRANTED` (403)  
-- If no consent record is found, verify currently **proceeds** (edge case)
+- Interop verify returns **403** if consent is not `GRANTED` or is expired  
+- Consent spec varies by service (Municipal←Revenue, Revenue self, Employment←Municipal)
 
-### 9.4 Mapping / data-quality rules
+### 9.3 Service prerequisites
 
-- Nested path get/set (`citizen.fullName`)  
-- Missing nested values → empty string / 0 / undefined skipped in generic mapper  
-- Revenue verification_status must be `VERIFIED_ACTIVE` for `revenueVerified`  
-- `property_tax_cleared` coerced to boolean  
-- CDM `citizenId` derived as `CIT-{last 4 of mobile}` (Rahul → `CIT-3210`)  
-- Ward: Pune → `WARD-14`, else `WARD-01`  
-- If CDM `revenueVerified`, MuniSys `approval_state` = `PENDING_MUNICIPAL_VERIFICATION`, else `PENDING_REVENUE_VERIFICATION`  
-- Clearance id: `REV-CLR-` + last 6 digits of timestamp  
+- **Skill subsidy** requires an existing `APPROVED` business license for the same citizen (checked at apply and verify).
 
-### 9.5 Adapter / exception rules
+### 9.4 Audit chain
 
-`BaseAdapter.execute`:
+Each `AuditLog` entry: `hash = SHA256(id|actorId|action|entityId|timestamp|prevHash)`. Stored in PostgreSQL with `prevHash` column.
 
-- Success envelope: departmentCode, systemName, data, rawPayload, executionTimeMs  
-- Failure: success false, error message, null data  
+### 9.5 Notifications
 
-Revenue fetch throws if execute failed. Municipal submit throws if register failed. Health: HEALTHY if execute success else DOWN.
-
-RevNet lookup: unknown identifier **falls back to Rahul Sharma** (demo reliability).
-
-### 9.6 Approval / license numbering
-
-On MahaSetu approve: license `MH-PUNE-MUNI-LIC-{10000–99999}` stored as `municipalPermitRef`. MuniSys mock itself issues `MH-PUNE-TRADE-{6 digits}` internally; gateway overwrites citizen-facing number.
-
-Approve uses `application.municipalPermitRef` (permitId like `PRM-******`) against MuniSys; mismatch can throw “not found in MuniSys” if ids diverge—happy path uses permitId returned at dispatch.
-
-### 9.7 Audit chain
-
-Hash payload: `id|actorId|action|entityId|timestamp|prevHash` → SHA-256 hex. Genesis `prevHash` is 64 zeros. Newest logs first.
-
-### 9.8 Events
-
-Types: `APPLICATION_CREATED`, `CONSENT_REQUESTED` (type exists), `CONSENT_GRANTED`, `CONSENT_REVOKED`, `REVENUE_FETCHED`, `DATA_NORMALIZED`, `MUNICIPAL_DISPATCHED`, `OFFICER_REVIEW_STARTED` (type exists), `APPLICATION_APPROVED`, `APPLICATION_REJECTED`.
-
-History capped at 200. SSE sends last 5 on connect, then live `*` emissions.
-
-### 9.9 Notifications (schema)
-
-Prisma `Notification` (title, message, type INFO/SUCCESS/WARNING/ACTION_REQUIRED, read flag). **Runtime citizen alerts** are UI banners driven by SSE, not this table.
-
-### 9.10 Employment / KaushalPortal rules (adapter level)
-
-Schemes:
-
-- `PMEGP_2026` max grant ₹2,50,000; if no trade license  
-- `MUDRA_TARUN` max grant ₹5,00,000; if `hasTradeLicense`  
-
-Eligibility payload always `eligible_for_subsidy: true`, `requires_address_clearance: true`. Mobile `9876543210` maps to legal_name Rahul Sharma.
+`notifyCitizen()` writes to `Notification` table on pipeline milestones and officer decisions. Citizen portal also shows SSE-driven banners.
 
 ---
 
-## 10. Domain data model (product entities)
-
-### 10.1 Conceptual ER
+## 10. Domain data model
 
 ```
 User 1──1 Citizen 1──* Application *──1 Service *──1 Department
                  └──* Consent *──1 Application
 Application 1──* ApplicationTimeline
-Department 1──* Integration
-Department 1──* FieldMapping
-AuditLog (append-only chain)
-Event (bus history; also Prisma model)
-Notification *──1 Citizen
+Department 1──* Integration, FieldMapping
+RevenueCitizenRecord (mobile → legacy JSON payload)
+MunicipalPermit (linked via mahasetuApplicationId)
+AuditLog (append-only hash chain)
+Event, Notification
 ```
 
-### 10.2 Entity dictionary (business meaning)
+### Seeded master data (`prisma/seed.js`)
 
-| Entity | Business meaning |
+- Departments: REVENUE, MUNICIPAL, EMPLOYMENT  
+- Services: BUSINESS_LICENSE, ADDRESS_VERIFICATION, SKILL_SUBSIDY  
+- Field mappings (RevNet → CDM → MuniSys)  
+- Integrations with endpoint URLs and auth types  
+- Staff user accounts (not citizens)  
+
+---
+
+## 11. Security & privacy
+
+| Requirement | Treatment |
 |---|---|
-| User | Login principal and role |
-| Citizen | Service recipient; Aadhaar stored as hash |
-| Department | Connected government org (code REVENUE / MUNICIPAL / EMPLOYMENT) |
-| Service | Catalogue item with SLA, fee, required clearances |
-| Application | Cross-department case file in MahaSetu |
-| ApplicationTimeline | Human-readable pipeline history |
-| Consent | Purpose-bound authorization to share fields from sourceDept to requestedByDept |
-| Integration | Connector instance (URL, auth type API_KEY / OAUTH2 / MUTUAL_TLS, latency) |
-| FieldMapping | Runtime translation rule |
-| AuditLog | Tamper-evident activity |
-| Event | Workflow signal |
-| Notification | Citizen inbox (modelled) |
-
-### 10.3 Seeded demo master data
-
-Departments: Revenue (`/api/mock/revenue`), Municipal, Employment.  
-Integrations: RevNet API_KEY 38ms; MuniSys OAUTH2 42ms; KaushalPortal API_KEY 35ms.  
-Citizen: Rahul Sharma, Kothrud, Pune 411038.  
-Historical in-memory application: `MH-MUNI-2026-9012` already APPROVED (Sharma Digital Services) so the portal is never empty.
-
-Secondary RevNet citizen: Priya Deshmukh, `9123456780`, Baner.
+| Consent-based sharing | Explicit grant; purpose; field list; deny/revoke |
+| Password storage | scrypt hash with per-user salt |
+| Session security | HTTP-only cookie; HMAC signature; 7-day expiry |
+| Identity | Aadhaar stored as SHA-256 hash only |
+| Audit | Tamper-evident hash chain with actor, role, IP |
+| Department isolation | Officers see only their department's application queue |
+| Transport | TLS required in production (`secure` cookie flag) |
 
 ---
 
-## 11. API surface (functional)
+## 12. Non-functional requirements
 
-Citizen/officer/admin UIs depend on these contracts. (Technical request/response detail is in Developer Documentation.)
-
-| Area | Methods | Functional role |
-|---|---|---|
-| Auth | POST login, GET me | Federated identity stand-in |
-| Citizens | GET me | Profile |
-| Services / Departments | GET | Catalogues |
-| Applications | GET list/filter, POST create, GET by id | Case file |
-| Verify | POST | Consent-gated interop pipeline |
-| Approve / Reject | POST | Officer decision |
-| Consents | GET, POST, approve, revoke | DPDP lifecycle |
-| Integrations | GET health, POST test ping | Monitoring |
-| Mappings | GET, PUT update, POST transform | MDM / sandbox |
-| Audit | GET | Compliance |
-| Events | GET SSE | Unified live tracking |
-| Mock RevNet / MuniSys / Kaushal | GET/POST | Legacy systems of record |
-
----
-
-## 12. Security, privacy, and compliance (product)
-
-| Requirement | Product treatment |
+| NFR | Target |
 |---|---|
-| Consent-based sharing | Explicit grant; purpose; field list; expiry; revoke |
-| Least data | Only listed fields requested in consent copy |
-| Identity | Aadhaar as hash; masked Aadhaar on profile `XXXX-XXXX-1234` |
-| Audit | Actor, role, action, entity, department, purpose, IP default 127.0.0.1, hash chain |
-| Connector auth types | API_KEY, OAUTH2, MUTUAL_TLS (declared on Integration; mocks do not enforce) |
-| Transport | Prototype HTTP local; production would be TLS + mTLS between adapters |
+| Database | PostgreSQL required; health endpoint verifies connectivity |
+| Interop latency | Sub-second for in-process adapter calls |
+| Real-time | SSE push within seconds of officer action |
+| Connector health | Ping updates status and latency in `Integration` table |
+| Scalability | Single Node process; horizontal scaling needs shared SSE/Redis (future) |
 
 ---
 
-## 13. UX principles
+## 13. Acceptance test flow (production)
 
-- **Single window** for the citizen; department systems remain visible as named silos on Overview.  
-- **Show the JSON** (demo, admin, revenue tab) so evaluators believe mapping is real.  
-- **Status in plain language** plus raw status codes for officers.  
-- **India tricolor** accent on navbar; saffron/green tokens in Tailwind.  
-- Glass panels, stepper, and SSE banners for “live government mesh” feel.  
-- Certificate modal supports print for tangible outcome.
-
----
-
-## 14. Non-functional requirements
-
-| NFR | Prototype target |
-|---|---|
-| Interop latency | Adapter health typically tens of milliseconds (in-process mocks) |
-| Real-time | SSE push; 15s heartbeat |
-| Availability of connectors | HEALTHY / DEGRADED / DOWN (DEGRADED reserved; health returns HEALTHY or DOWN) |
-| Audit integrity | prevHash linkage verifiable in tests |
-| Scalability | In-memory + single Node process; Kafka/Redis in compose for future |
-| Accessibility | Semantic buttons/labels; not a full WCAG audit |
-| Browser | Modern EventSource support |
+1. Run `npx prisma db push` and `node prisma/seed.js` against production PostgreSQL.  
+2. Register a new citizen at `/register`.  
+3. Sign in → apply for **Municipal trade & business license**.  
+4. Grant consent → confirm application moves to **Officer review**.  
+5. Sign in as `municipal.officer@mahasetu.gov.in` → sanction application.  
+6. Return to citizen portal → status **Approved**; view/print certificate.  
+7. Apply for **Skill subsidy** (should succeed after license approval).  
+8. Admin: verify mappings, run sandbox transform, ping connectors, inspect audit chain.  
+9. `GET /api/health` returns `{ ok: true, database: "up" }`.
 
 ---
 
-## 15. Mapping SIH 26129 “expected solution” to modules
+## 14. Future extensions
 
-| Expected solution element | Product module / page |
-|---|---|
-| Interoperability framework / middleware | MahaSetu Core + adapters |
-| Federated service delivery | Citizen single window + departmental mocks |
-| API-based exchange | `/api/mock/*` + adapters |
-| Common data standards | CDM types + mapping engine |
-| Master-data management | Services, departments, field mappings, Admin studio |
-| Consent-based sharing | Consent manager + citizen banner |
-| SSO / federated identity | Auth login/me + DigiLocker-linked profile copy |
-| Event-driven notifications | Event bus + Navbar ticker + citizen alerts |
-| Unified application tracking | Citizen stepper + officer queue |
-| Configurable workflow orchestration | Create → consent → verify → officer |
-| Reusable connectors | BaseAdapter subclasses |
-| Audit logs | AuditLogger + Admin tab |
-| RBAC | User.role + portal separation |
-| Data-quality / exceptions | Mapping + adapter errors + 403 consent |
-| Monitoring dashboards | Home topology, Admin integrations, ping |
-
----
-
-## 16. Demo script (product acceptance)
-
-1. Open `/` — explain three silos + CDM bridge.  
-2. Open `/demo` — auto-play 10 steps and three JSON columns.  
-3. Open `/citizen` — Apply for Trade License (Rahul Enterprises).  
-4. Grant DPDP consent — watch pipeline message with `REV-CLR-*`.  
-5. Open `/department` — ledger shows clearance; Sanction Trade License.  
-6. Return to `/citizen` (or wait for SSE) — Approved + View Trade License.  
-7. Open `/admin` — mappings, sandbox transform, ping adapters, show hash chain.  
-8. Optional: Revenue tab query `9876543210` vs `9123456780`.  
-9. Run `npm run test:interop` / `npx tsx scripts/test-interop.ts` for six automated proofs.
-
----
-
-## 17. Future product extensions (out of current code, aligned to PS)
-
-- Wire `/api/auth` into real portal switching and API RBAC.  
-- Persist applications/consents/audit to Prisma instead of memory.  
-- Persist Admin “Add Rule” via `applicationStore.addFieldMapping` / Prisma `FieldMapping`.  
-- Orchestrate `ADDRESS_VERIFICATION` and `SKILL_SUBSIDY` with EmploymentAdapter (license as prerequisite).  
-- True IdP (Aadhaar/ePramaan), mTLS connectors, Kafka, SLA dashboards with exception queues.  
-- Grievance and multi-application beneficiary 360° view for officials.
+- OIDC / ePramaan government SSO  
+- HTTP adapters to live departmental APIs (replace in-process mocks)  
+- Prisma Migrate workflow (replace `db push`)  
+- Redis-backed SSE for multi-instance deployments  
+- Grievance module and officer beneficiary 360° view  
+- SMS/email notifications alongside in-app alerts  
 
 ---
 

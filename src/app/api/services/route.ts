@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/db/application-store';
+import { getServices } from '@/lib/db/application-store';
+import { requireSession } from '@/lib/auth/guards';
 
 export async function GET() {
-  const services = applicationStore.getServices();
+  const auth = requireSession();
+  if ('response' in auth) return auth.response;
+  const services = await getServices();
   return NextResponse.json({ success: true, services });
 }

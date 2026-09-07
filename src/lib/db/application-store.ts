@@ -1,319 +1,273 @@
-import { FieldMappingRule } from '../interop/types';
+import { prisma } from '@/lib/db/prisma';
+import { Prisma } from '@prisma/client';
 
-export interface ApplicationRecord {
+const appInclude = {
+  citizen: true,
+  service: { include: { department: true } },
+  department: true,
+  timelines: { orderBy: { timestamp: 'asc' as const } },
+  consents: { orderBy: { createdAt: 'desc' as const } },
+};
+
+export function serializeApplication(app: {
   id: string;
   applicationNumber: string;
   citizenId: string;
   serviceId: string;
   departmentId: string;
-  status:
-    | 'DRAFT'
-    | 'CONSENT_PENDING'
-    | 'REVENUE_VERIFIED'
-    | 'PENDING_OFFICER_REVIEW'
-    | 'APPROVED'
-    | 'REJECTED';
+  status: string;
+  payloadJson: string;
   businessName: string;
   tradeCategory: string;
-  revenueClearanceRef?: string;
-  municipalPermitRef?: string;
-  officerComments?: string;
-  timeline: Array<{
+  revenueClearanceRef: string | null;
+  municipalPermitRef: string | null;
+  officerComments: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  citizen?: { fullName: string; mobile: string };
+  service?: { code: string; name: string; department?: { code: string; name: string } };
+  department?: { code: string; name: string };
+  timelines?: Array<{
     stage: string;
-    status: 'SUCCESS' | 'PENDING' | 'ERROR';
+    status: string;
     details: string;
     actor: string;
-    timestamp: string;
+    timestamp: Date;
   }>;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ServiceDetail {
-  id: string;
-  code: string;
-  name: string;
-  departmentId: string;
-  departmentName: string;
-  description: string;
-  requiredClearance: string;
-  slaDays: number;
-  fee: number;
-  icon: string;
-}
-
-class ApplicationStore {
-  private applications: Map<string, ApplicationRecord> = new Map();
-  private fieldMappings: FieldMappingRule[] = [];
-  private services: ServiceDetail[] = [];
-
-  constructor() {
-    this.seedDefaults();
+  consents?: Array<{
+    id: string;
+    status: string;
+    requestedByDept: string;
+    sourceDept: string;
+    purpose: string;
+    dataFields: string;
+    applicationId: string;
+  }>;
+}) {
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = JSON.parse(app.payloadJson || '{}');
+  } catch {
+    payload = {};
   }
-
-  private seedDefaults() {
-    this.services = [
-      {
-        id: 'SRV-01',
-        code: 'BUSINESS_LICENSE',
-        name: 'Municipal Trade & Business License',
-        departmentId: 'MUNICIPAL',
-        departmentName: 'Municipal Corporation (MuniSys)',
-        description: 'Statutory trade and establishment license for commercial operations within municipal limits.',
-        requiredClearance: 'Revenue Department Address & Property Tax Clearance',
-        slaDays: 3,
-        fee: 1200,
-        icon: 'Store',
-      },
-      {
-        id: 'SRV-02',
-        code: 'ADDRESS_VERIFICATION',
-        name: 'Official Residential & Land Record Verification',
-        departmentId: 'REVENUE',
-        departmentName: 'Revenue Department (RevNet)',
-        description: 'Official digital land holding and residential address clearance certificate.',
-        requiredClearance: 'Revenue Inspector Digital Sign-off',
-        slaDays: 2,
-        fee: 0,
-        icon: 'Home',
-      },
-      {
-        id: 'SRV-03',
-        code: 'SKILL_SUBSIDY',
-        name: 'MSME Youth Enterprise & Skill Subsidy',
-        departmentId: 'EMPLOYMENT',
-        departmentName: 'Employment & Skill Dept (KaushalPortal)',
-        description: 'Direct capital subsidy scheme for certified technicians and entrepreneurs under PMEGP.',
-        requiredClearance: 'Verified Trade License + Domicile',
-        slaDays: 5,
-        fee: 0,
-        icon: 'Briefcase',
-      },
-    ];
-
-    this.fieldMappings = [
-      {
-        id: 'FMP-01',
-        sourceSystem: 'RevNet',
-        sourceField: 'citizen.fullName',
-        targetSystem: 'MahaSetu_CDM',
-        targetField: 'name',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-02',
-        sourceSystem: 'RevNet',
-        sourceField: 'citizen.mobile',
-        targetSystem: 'MahaSetu_CDM',
-        targetField: 'mobile',
-        transformation: 'FORMAT_MOBILE',
-      },
-      {
-        id: 'FMP-03',
-        sourceSystem: 'RevNet',
-        sourceField: 'address_record.city_name',
-        targetSystem: 'MahaSetu_CDM',
-        targetField: 'address.city',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-04',
-        sourceSystem: 'RevNet',
-        sourceField: 'address_record.pin',
-        targetSystem: 'MahaSetu_CDM',
-        targetField: 'address.postalCode',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-05',
-        sourceSystem: 'RevNet',
-        sourceField: 'address_record.property_tax_cleared',
-        targetSystem: 'MahaSetu_CDM',
-        targetField: 'clearances.propertyTaxCleared',
-        transformation: 'BOOLEAN_FLAG',
-      },
-      {
-        id: 'FMP-06',
-        sourceSystem: 'MahaSetu_CDM',
-        sourceField: 'name',
-        targetSystem: 'MuniSys',
-        targetField: 'applicant_name',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-07',
-        sourceSystem: 'MahaSetu_CDM',
-        sourceField: 'mobile',
-        targetSystem: 'MuniSys',
-        targetField: 'phone_number',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-08',
-        sourceSystem: 'MahaSetu_CDM',
-        sourceField: 'address.fullFormattedAddress',
-        targetSystem: 'MuniSys',
-        targetField: 'premises_address',
-        transformation: 'DIRECT',
-      },
-      {
-        id: 'FMP-09',
-        sourceSystem: 'MahaSetu_CDM',
-        sourceField: 'clearances.revenueReferenceId',
-        targetSystem: 'MuniSys',
-        targetField: 'revenue_clearance_ref',
-        transformation: 'DIRECT',
-      },
-    ];
-
-    // Seed one completed historical application to show past records
-    const histAppId = 'MH-MUNI-2026-9012';
-    this.applications.set(histAppId, {
-      id: histAppId,
-      applicationNumber: histAppId,
-      citizenId: 'CIT-3210',
-      serviceId: 'BUSINESS_LICENSE',
-      departmentId: 'MUNICIPAL',
-      status: 'APPROVED',
-      businessName: 'Sharma Digital Services',
-      tradeCategory: 'IT_AND_COMMUNICATIONS',
-      revenueClearanceRef: 'REV-CLR-990142',
-      municipalPermitRef: 'MH-PUNE-MUNI-LIC-4412',
-      officerComments: 'All records cross-verified successfully via RevNet interop.',
-      timeline: [
-        {
-          stage: 'CREATED',
-          status: 'SUCCESS',
-          details: 'Application submitted by Rahul Sharma',
-          actor: 'Citizen (Rahul Sharma)',
-          timestamp: new Date(Date.now() - 172800000).toISOString(),
-        },
-        {
-          stage: 'CONSENT_GRANTED',
-          status: 'SUCCESS',
-          details: 'Citizen authorized Revenue Department data share',
-          actor: 'Citizen (Rahul Sharma)',
-          timestamp: new Date(Date.now() - 170000000).toISOString(),
-        },
-        {
-          stage: 'REVENUE_VERIFIED',
-          status: 'SUCCESS',
-          details: 'RevNet verified residential address and tax clearance (Ref: REV-CLR-990142)',
-          actor: 'MahaSetu RevenueAdapter',
-          timestamp: new Date(Date.now() - 165000000).toISOString(),
-        },
-        {
-          stage: 'APPROVED',
-          status: 'SUCCESS',
-          details: 'Municipal Officer signed and issued Trade Permit',
-          actor: 'Officer M. Kulkarni (Municipal Dept)',
-          timestamp: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ],
-      createdAt: new Date(Date.now() - 172800000).toISOString(),
-      updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    });
-  }
-
-  public getServices(): ServiceDetail[] {
-    return this.services;
-  }
-
-  public getService(code: string): ServiceDetail | undefined {
-    return this.services.find((s) => s.code === code || s.id === code);
-  }
-
-  public getFieldMappings(): FieldMappingRule[] {
-    return [...this.fieldMappings];
-  }
-
-  public updateFieldMapping(id: string, updates: Partial<FieldMappingRule>): FieldMappingRule {
-    const idx = this.fieldMappings.findIndex((m) => m.id === id);
-    if (idx === -1) throw new Error(`Mapping ${id} not found`);
-    this.fieldMappings[idx] = { ...this.fieldMappings[idx], ...updates };
-    return this.fieldMappings[idx];
-  }
-
-  public addFieldMapping(rule: Omit<FieldMappingRule, 'id'>): FieldMappingRule {
-    const newRule = { ...rule, id: `FMP-0${this.fieldMappings.length + 1}` };
-    this.fieldMappings.push(newRule);
-    return newRule;
-  }
-
-  public createApplication(params: {
-    citizenId: string;
-    serviceId: string;
-    departmentId: string;
-    businessName: string;
-    tradeCategory?: string;
-  }): ApplicationRecord {
-    const appNum = `MH-MUNI-2026-${Math.floor(10000 + Math.random() * 90000)}`;
-    const record: ApplicationRecord = {
-      id: appNum,
-      applicationNumber: appNum,
-      citizenId: params.citizenId,
-      serviceId: params.serviceId,
-      departmentId: params.departmentId,
-      status: 'CONSENT_PENDING',
-      businessName: params.businessName,
-      tradeCategory: params.tradeCategory || 'COMMERCIAL_RETAIL',
-      timeline: [
-        {
-          stage: 'CREATED',
-          status: 'SUCCESS',
-          details: `Application initiated for ${params.businessName}`,
-          actor: 'Citizen Portal',
-          timestamp: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    this.applications.set(appNum, record);
-    return record;
-  }
-
-  public getApplication(id: string): ApplicationRecord | null {
-    return this.applications.get(id) || null;
-  }
-
-  public getAllApplications(): ApplicationRecord[] {
-    return Array.from(this.applications.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }
-
-  public updateApplication(id: string, updates: Partial<ApplicationRecord>): ApplicationRecord {
-    const app = this.applications.get(id);
-    if (!app) throw new Error(`Application ${id} not found`);
-    const updated = {
-      ...app,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
-    this.applications.set(id, updated);
-    return updated;
-  }
-
-  public addTimelineEvent(
-    appId: string,
-    event: { stage: string; status: 'SUCCESS' | 'PENDING' | 'ERROR'; details: string; actor: string }
-  ) {
-    const app = this.applications.get(appId);
-    if (app) {
-      app.timeline.push({
-        ...event,
-        timestamp: new Date().toISOString(),
-      });
-      app.updatedAt = new Date().toISOString();
-      this.applications.set(appId, app);
+  const latestConsent = app.consents?.[0];
+  let dataFields: string[] = [];
+  if (latestConsent) {
+    try {
+      dataFields = JSON.parse(latestConsent.dataFields);
+    } catch {
+      dataFields = [];
     }
   }
+  return {
+    id: app.id,
+    applicationNumber: app.applicationNumber,
+    citizenId: app.citizenId,
+    citizenName: app.citizen?.fullName,
+    citizenMobile: app.citizen?.mobile,
+    serviceId: app.service?.code || app.serviceId,
+    serviceName: app.service?.name,
+    departmentId: app.department?.code || app.departmentId,
+    departmentName: app.department?.name,
+    status: app.status,
+    businessName: app.businessName,
+    tradeCategory: app.tradeCategory,
+    revenueClearanceRef: app.revenueClearanceRef,
+    municipalPermitRef: app.municipalPermitRef,
+    officerComments: app.officerComments,
+    payload,
+    timeline: (app.timelines || []).map((t) => ({
+      stage: t.stage,
+      status: t.status,
+      details: t.details,
+      actor: t.actor,
+      timestamp: t.timestamp.toISOString(),
+    })),
+    consent: latestConsent
+      ? {
+          id: latestConsent.id,
+          status: latestConsent.status,
+          requestedByDept: latestConsent.requestedByDept,
+          sourceDept: latestConsent.sourceDept,
+          purpose: latestConsent.purpose,
+          dataFields,
+          applicationId: latestConsent.applicationId,
+        }
+      : null,
+    createdAt: app.createdAt.toISOString(),
+    updatedAt: app.updatedAt.toISOString(),
+  };
 }
 
-declare global {
-  var __mahasetu_app_store: ApplicationStore | undefined;
+export async function getServices() {
+  const services = await prisma.service.findMany({
+    include: { department: true },
+    orderBy: { name: 'asc' },
+  });
+  return services.map((srv) => {
+    let required: string[] = [];
+    try {
+      required = JSON.parse(srv.requiredClearances);
+    } catch {
+      required = [];
+    }
+    return {
+      id: srv.id,
+      code: srv.code,
+      name: srv.name,
+      departmentId: srv.department.code,
+      departmentName: srv.department.name,
+      description: srv.description,
+      requiredClearance: required.join(', '),
+      requiredClearances: required,
+      slaDays: srv.slaDays,
+      fee: srv.fee,
+    };
+  });
 }
 
-export const applicationStore: ApplicationStore =
-  global.__mahasetu_app_store || (global.__mahasetu_app_store = new ApplicationStore());
+function yearPrefix(deptCode: string) {
+  const y = new Date().getFullYear();
+  const map: Record<string, string> = {
+    MUNICIPAL: `MH-MUNI-${y}`,
+    REVENUE: `MH-REV-${y}`,
+    EMPLOYMENT: `MH-EMP-${y}`,
+  };
+  return map[deptCode] || `MH-${y}`;
+}
+
+export async function createApplication(params: {
+  citizenId: string;
+  serviceCode: string;
+  businessName: string;
+  tradeCategory?: string;
+  payload?: Record<string, unknown>;
+}) {
+  const service = await prisma.service.findUnique({
+    where: { code: params.serviceCode },
+    include: { department: true },
+  });
+  if (!service) throw new Error('Service not found');
+
+  const applicationNumber = `${yearPrefix(service.department.code)}-${Math.floor(10000 + Math.random() * 90000)}`;
+
+  const app = await prisma.application.create({
+    data: {
+      applicationNumber,
+      citizenId: params.citizenId,
+      serviceId: service.id,
+      departmentId: service.departmentId,
+      status: 'CONSENT_PENDING',
+      businessName: params.businessName,
+      tradeCategory: params.tradeCategory || '',
+      payloadJson: JSON.stringify(params.payload || {}),
+      timelines: {
+        create: {
+          stage: 'CREATED',
+          status: 'SUCCESS',
+          details: `Application submitted for ${service.name}`,
+          actor: 'Citizen',
+        },
+      },
+    },
+    include: appInclude,
+  });
+
+  return serializeApplication(app);
+}
+
+export async function getApplicationById(id: string) {
+  const app = await prisma.application.findFirst({
+    where: { OR: [{ id }, { applicationNumber: id }] },
+    include: appInclude,
+  });
+  return app ? serializeApplication(app) : null;
+}
+
+export async function listApplications(filter?: { citizenId?: string; departmentCode?: string }) {
+  const where: Prisma.ApplicationWhereInput = {};
+  if (filter?.citizenId) where.citizenId = filter.citizenId;
+  if (filter?.departmentCode) {
+    where.department = { code: filter.departmentCode };
+  }
+  const apps = await prisma.application.findMany({
+    where,
+    include: appInclude,
+    orderBy: { createdAt: 'desc' },
+  });
+  return apps.map(serializeApplication);
+}
+
+export async function updateApplication(
+  id: string,
+  data: {
+    status?: string;
+    revenueClearanceRef?: string;
+    municipalPermitRef?: string;
+    officerComments?: string;
+    payloadJson?: string;
+    businessName?: string;
+  }
+) {
+  await prisma.application.update({ where: { id }, data });
+  return getApplicationById(id);
+}
+
+export async function addTimelineEvent(
+  applicationId: string,
+  event: { stage: string; status: 'SUCCESS' | 'PENDING' | 'ERROR'; details: string; actor: string }
+) {
+  await prisma.applicationTimeline.create({
+    data: {
+      applicationId,
+      ...event,
+    },
+  });
+}
+
+export async function getFieldMappings() {
+  const rows = await prisma.fieldMapping.findMany({ orderBy: { createdAt: 'asc' } });
+  return rows.map((m) => ({
+    id: m.id,
+    sourceSystem: m.sourceSystem,
+    sourceField: m.sourceField,
+    targetSystem: m.targetSystem,
+    targetField: m.targetField,
+    transformation: (m.transformation || 'DIRECT') as
+      | 'DIRECT'
+      | 'TO_UPPER'
+      | 'CONCAT_ADDRESS'
+      | 'BOOLEAN_FLAG'
+      | 'FORMAT_MOBILE',
+  }));
+}
+
+export async function addFieldMapping(rule: {
+  departmentId: string;
+  sourceSystem: string;
+  sourceField: string;
+  targetSystem: string;
+  targetField: string;
+  transformation?: string;
+}) {
+  return prisma.fieldMapping.create({ data: rule });
+}
+
+export async function updateFieldMapping(
+  id: string,
+  updates: Partial<{
+    sourceSystem: string;
+    sourceField: string;
+    targetSystem: string;
+    targetField: string;
+    transformation: string;
+  }>
+) {
+  return prisma.fieldMapping.update({ where: { id }, data: updates });
+}
+
+export async function notifyCitizen(citizenId: string, title: string, message: string, type = 'INFO') {
+  return prisma.notification.create({
+    data: { citizenId, title, message, type },
+  });
+}

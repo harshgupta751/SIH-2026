@@ -1,18 +1,26 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/db/application-store';
-import { consentManager } from '@/lib/consent/consent-manager';
+import { requireSession, isOfficer, forbidden } from '@/lib/auth/guards';
+import { getApplicationById } from '@/lib/db/application-store';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const application = applicationStore.getApplication(params.id);
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const auth = requireSession();
+  if ('response' in auth) return auth.response;
+
+  const application = await getApplicationById(params.id);
   if (!application) {
     return NextResponse.json({ success: false, error: 'Application not found' }, { status: 404 });
   }
 
-  const consent = consentManager.getConsentForApplication(params.id);
+  if (auth.user.role === 'CITIZEN' && application.citizenId !== auth.user.citizenId) {
+    return forbidden();
+  }
+  if (isOfficer(auth.user.role) && auth.user.departmentCode && application.departmentId !== auth.user.departmentCode) {
+    return forbidden();
+  }
 
   return NextResponse.json({
     success: true,
     application,
-    consent,
+    consent: application.consent,
   });
 }

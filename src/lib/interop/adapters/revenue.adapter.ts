@@ -16,9 +16,9 @@ export class RevenueAdapter extends BaseAdapter {
   ): Promise<{ cdm: CommonCitizenRecord; raw: RevNetCitizenResponse; latencyMs: number }> {
     const res = await this.execute(async () => {
       // In local monolithic execution, call the mock service directly for zero latency variance
-      const rawData = revenueMockSystem.getCitizenRecord(identifier);
+      const rawData = await revenueMockSystem.getCitizenRecord(identifier);
       if (!rawData) {
-        throw new Error(`Citizen not found in Revenue Department (RevNet) for: ${identifier}`);
+        throw new Error(`No revenue record found for identifier ${identifier}`);
       }
       return rawData;
     });
@@ -48,7 +48,8 @@ export class RevenueAdapter extends BaseAdapter {
 
   public async testHealth(): Promise<{ status: 'HEALTHY' | 'DEGRADED' | 'DOWN'; latencyMs: number }> {
     const res = await this.execute(async () => {
-      return revenueMockSystem.getCitizenRecord('9876543210');
+      const record = await revenueMockSystem.getCitizenRecord('healthcheck');
+      return record ?? { ok: true };
     });
     return {
       status: res.success ? 'HEALTHY' : 'DOWN',

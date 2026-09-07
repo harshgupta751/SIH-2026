@@ -1,59 +1,83 @@
 import { NextResponse } from 'next/server';
-import { applicationStore } from '@/lib/db/application-store';
+import { requireRoles, forbidden, clientIp } from '@/lib/auth/guards';
+import { addTimelineEvent, getApplicationById, notifyCitizen, updateApplication } from '@/lib/db/application-store';
 import { municipalAdapter } from '@/lib/interop/adapters/municipal.adapter';
-import { auditLogger } from '@/lib/audit/audit-logger';
+import { writeAudit } from '@/lib/audit/audit-logger';
 import { eventBus } from '@/lib/events/event-bus';
 
+const ROLE_DEPT: Record<string, string> = {
+  OFFICER_MUNICIPAL: 'MUNICIPAL',
+  OFFICER_REVENUE: 'REVENUE',
+  OFFICER_EMPLOYMENT: 'EMPLOYMENT',
+};
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const auth = requireRoles(['OFFICER_MUNICIPAL', 'OFFICER_REVENUE', 'OFFICER_EMPLOYMENT', 'ADMIN']);
+  if ('response' in auth) return auth.response;
+
   try {
     const body = await req.json().catch(() => ({}));
-    const { reason = 'Premises address zoning does not permit commercial establishment.', officerName = 'M. Kulkarni' } = body;
-
-    const application = applicationStore.getApplication(params.id);
+    const reason = String(body.reason || 'Application does not meet statutory requirements.');
+    const application = await getApplicationById(params.id);
     if (!application) {
       return NextResponse.json({ success: false, error: 'Application not found' }, { status: 404 });
     }
 
-    const muniAppNo = application.municipalPermitRef || params.id;
-    await municipalAdapter.rejectTradeApplication(muniAppNo, reason);
+    const officerDept = ROLE_DEPT[auth.user.role];
+    if (auth.user.role !== 'ADMIN' && officerDept && application.departmentId !== officerDept) {
+      return forbidden('This application belongs to another department');
+    }
 
-    applicationStore.updateApplication(application.id, {
+    if (application.departmentId === 'MUNICIPAL' && application.municipalPermitRef) {
+      await municipalAdapter.rejectTradeApplication(application.municipalPermitRef, reason);
+    }
+
+    await updateApplication(application.id, {
       status: 'REJECTED',
       officerComments: reason,
     });
 
-    applicationStore.addTimelineEvent(application.id, {
+    await addTimelineEvent(application.id, {
       stage: 'REJECTED',
       status: 'ERROR',
-      details: `Application rejected by Municipal Officer. Reason: ${reason}`,
-      actor: `Municipal Officer (${officerName})`,
+      details: `Application rejected. ${reason}`,
+      actor: `Officer (${auth.user.name})`,
     });
 
-    eventBus.publish('APPLICATION_REJECTED', {
-      source: 'MUNICIPAL_OFFICER',
+    await eventBus.publish('APPLICATION_REJECTED', {
+      source: 'DEPARTMENT_OFFICER',
       applicationId: application.id,
       citizenId: application.citizenId,
-      summary: `Application ${application.id} REJECTED. Reason: ${reason}`,
+      summary: `Application ${application.applicationNumber} rejected`,
       metadata: { reason },
     });
 
-    auditLogger.log({
-      actorId: 'OFFICER-PUNE-MUNI-04',
-      actorRole: 'DEPARTMENT_OFFICER',
+    await writeAudit({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
       action: 'APPLICATION_REJECTED',
       entityType: 'APPLICATION',
       entityId: application.id,
-      department: 'MUNICIPAL',
-      purpose: 'Statutory Trade License Rejection',
-      details: { reason, officerName },
+      department: application.departmentId,
+      purpose: 'Officer rejection',
+      details: { reason, officerName: auth.user.name },
+      ipAddress: clientIp(req),
     });
+
+    await notifyCitizen(
+      application.citizenId,
+      'Application rejected',
+      `Application ${application.applicationNumber} was rejected. ${reason}`,
+      'WARNING'
+    );
 
     return NextResponse.json({
       success: true,
       message: 'Application rejected',
-      application: applicationStore.getApplication(params.id),
+      application: await getApplicationById(application.id),
     });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Rejection failed';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

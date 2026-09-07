@@ -14,7 +14,8 @@ export class MunicipalAdapter extends BaseAdapter {
   public async submitTradeLicenseApplication(
     cdm: CommonCitizenRecord,
     businessTitle: string,
-    tradeCategory: string = 'COMMERCIAL_RETAIL'
+    tradeCategory: string = 'COMMERCIAL_RETAIL',
+    mahasetuApplicationId?: string
   ): Promise<{
     permitRecord: MunicipalPermitRecord;
     dispatchedPayload: MuniSysApplicationPayload;
@@ -23,7 +24,7 @@ export class MunicipalAdapter extends BaseAdapter {
     const dispatchedPayload = DataMappingEngine.transformCDMToMunicipal(cdm, businessTitle, tradeCategory);
 
     const res = await this.execute(async () => {
-      return municipalMockSystem.registerApplication(dispatchedPayload);
+      return municipalMockSystem.registerApplication(dispatchedPayload, mahasetuApplicationId);
     });
 
     if (!res.success || !res.data) {
@@ -45,7 +46,7 @@ export class MunicipalAdapter extends BaseAdapter {
     comments?: string
   ): Promise<AdapterResponse<MunicipalPermitRecord>> {
     return this.execute(async () => {
-      return municipalMockSystem.approveApplication(applicationNumber, comments);
+      return municipalMockSystem.approveApplication(applicationNumber, comments || 'Approved');
     });
   }
 

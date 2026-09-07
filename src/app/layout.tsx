@@ -3,9 +3,9 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'MahaSetu | Government Interoperability & Unified Service Delivery Platform',
+  title: 'MahaSetu | Government Interoperability Platform',
   description:
-    'SIH26129: Enterprise middleware platform connecting heterogeneous departmental systems through standardized APIs, Common Data Model (CDM), DPDP consent management, and event-driven workflows.',
+    'Secure, standards-based interoperability across government departments: consent-based data sharing, common data model, and unified service delivery.',
 };
 
 export default function RootLayout({
@@ -20,12 +20,8 @@ export default function RootLayout({
         <main className="flex-1 pb-16">{children}</main>
         <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="font-medium">
-              MahaSetu Platform • Smart India Hackathon (SIH26129)
-            </p>
-            <p className="text-slate-400">
-              Department of Revenue (RevNet) ↔ Municipal Corp (MuniSys) ↔ Employment Dept (KaushalPortal)
-            </p>
+            <p className="font-medium">MahaSetu — Government of Maharashtra interoperability platform</p>
+            <p className="text-slate-400">Revenue · Municipal · Employment systems connected through a consent-governed gateway</p>
           </div>
         </footer>
       </body>

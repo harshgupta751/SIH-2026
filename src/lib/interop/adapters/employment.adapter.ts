@@ -15,6 +15,13 @@ export class EmploymentAdapter extends BaseAdapter {
     const res = await this.execute(async () => {
       return employmentMockSystem.checkEligibility(mobile, hasTradeLicense);
     });
+    if (!res.data) throw new Error(res.error || 'Employment system unavailable');
+
+    const { prisma } = await import('@/lib/db/prisma');
+    const citizen = await prisma.citizen.findUnique({ where: { mobile } });
+    if (citizen) {
+      res.data.candidate_profile.legal_name = citizen.fullName;
+    }
     return res.data;
   }
 

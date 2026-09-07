@@ -2,7 +2,7 @@
   "name": "mahasetu",
   "version": "1.0.0",
   "private": true,
-  "description": "MahaSetu: Government Digital Platform Interoperability & Unified Service Delivery System (SIH26129)",
+  "description": "MahaSetu government interoperability and unified service delivery platform",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -11,7 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
-    "test:interop": "node scripts/test-interop.js"
+    "test:interop": "npx --yes tsx scripts/test-interop.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",

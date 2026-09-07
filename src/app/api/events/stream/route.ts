@@ -1,34 +1,41 @@
 import { eventBus } from '@/lib/events/event-bus';
 import { MahaSetuEvent } from '@/lib/interop/types';
+import { getSessionFromCookieHeader } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const encoder = new TextEncoder();
+export async function GET(req: Request) {
+  const user = getSessionFromCookieHeader(req.headers.get('cookie'));
+  if (!user) {
+    return new Response(JSON.stringify({ success: false, error: 'Authentication required' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
+  const encoder = new TextEncoder();
   const stream = new ReadableStream({
-    start(controller) {
-      // Send initial connection establishment packet
+    async start(controller) {
+      const history = await eventBus.getHistory(8);
       const initPayload = JSON.stringify({
         type: 'CONNECTED',
         timestamp: new Date().toISOString(),
-        recentEvents: eventBus.getHistory(5),
+        recentEvents: history,
       });
       controller.enqueue(encoder.encode(`data: ${initPayload}\n\n`));
 
-      // Event listener for live reactive events
       const onEvent = (event: MahaSetuEvent) => {
         try {
-          const chunk = `data: ${JSON.stringify(event)}\n\n`;
-          controller.enqueue(encoder.encode(chunk));
-        } catch (err) {
-          // Stream might have closed
+          if (user.role === 'CITIZEN' && event.citizenId && event.citizenId !== user.citizenId) {
+            return;
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          // stream closed
         }
       };
 
       eventBus.on('*', onEvent);
-
-      // Keep-alive heartbeat every 15s
       const heartbeatInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`: heartbeat\n\n`));
@@ -37,7 +44,6 @@ export async function GET() {
         }
       }, 15000);
 
-      // Cleanup when connection closes
       return () => {
         clearInterval(heartbeatInterval);
         eventBus.off('*', onEvent);

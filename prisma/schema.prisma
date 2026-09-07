@@ -1,5 +1,3 @@
-// This is your Prisma schema file for MahaSetu
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,161 +8,175 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String      @id @default(cuid())
+  email        String      @unique
   name         String
-  role         String    // CITIZEN, OFFICER_MUNICIPAL, OFFICER_REVENUE, OFFICER_EMPLOYMENT, ADMIN
+  passwordHash String      @default("")
+  role         String
   departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
   citizen      Citizen?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model Citizen {
-  id           String        @id @default(cuid())
-  userId       String        @unique
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fullName     String
-  mobile       String
-  aadhaarHash  String        @unique
-  addressLine  String
-  locality     String
-  city         String
-  district     String
-  state        String
-  postalCode   String
-  applications Application[]
-  consents     Consent[]
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  mobile        String         @unique
+  aadhaarHash   String         @unique
+  addressLine   String
+  locality      String
+  city          String
+  district      String
+  state         String         @default("Maharashtra")
+  postalCode    String
+  applications  Application[]
+  consents      Consent[]
   notifications Notification[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Department {
-  id          String        @id @default(cuid())
-  code        String        @unique // REVENUE, MUNICIPAL, EMPLOYMENT
-  name        String
-  description String
-  icon        String
-  apiBaseUrl  String
-  status      String        @default("HEALTHY") // HEALTHY, DEGRADED, DOWN
-  services    Service[]
+  id           String         @id @default(cuid())
+  code         String         @unique
+  name         String
+  description  String
+  icon         String
+  apiBaseUrl   String
+  status       String         @default("HEALTHY")
+  services     Service[]
   applications Application[]
   integrations Integration[]
-  mappings    FieldMapping[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  mappings     FieldMapping[]
+  users        User[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 model Service {
-  id                  String        @id @default(cuid())
-  code                String        @unique // BUSINESS_LICENSE, ADDRESS_VERIFICATION, SKILL_SUBSIDY
-  name                String
-  departmentId        String
-  department          Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  description         String
-  requiredClearances  String        // JSON string array e.g. ["REVENUE_ADDRESS_VERIFICATION"]
-  slaDays             Int           @default(7)
-  fee                 Float         @default(0.0)
-  applications        Application[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  code               String        @unique
+  name               String
+  departmentId       String
+  department         Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  description        String
+  requiredClearances String
+  slaDays            Int           @default(7)
+  fee                Float         @default(0.0)
+  applications       Application[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 }
 
 model Application {
-  id                   String                @id @default(cuid())
-  applicationNumber    String                @unique // e.g. MH-MUNI-2026-10231
-  citizenId            String
-  citizen              Citizen               @relation(fields: [citizenId], references: [id], onDelete: Cascade)
-  serviceId            String
-  service              Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  departmentId         String
-  department           Department            @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  status               String                @default("DRAFT") // DRAFT, CONSENT_PENDING, REVENUE_VERIFIED, PENDING_OFFICER_REVIEW, APPROVED, REJECTED
-  payloadJson          String                // JSON data submitted by applicant / normalized by adapters
-  revenueClearanceRef  String?
-  municipalPermitRef   String?
-  consents             Consent[]
-  timelines            ApplicationTimeline[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                  String                @id @default(cuid())
+  applicationNumber   String                @unique
+  citizenId           String
+  citizen             Citizen               @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  serviceId           String
+  service             Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  departmentId        String
+  department          Department            @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  status              String                @default("DRAFT")
+  payloadJson         String                @default("{}")
+  businessName        String                @default("")
+  tradeCategory       String                @default("")
+  revenueClearanceRef String?
+  municipalPermitRef  String?
+  officerComments     String?
+  consents            Consent[]
+  timelines           ApplicationTimeline[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([citizenId])
+  @@index([departmentId])
+  @@index([status])
 }
 
 model ApplicationTimeline {
   id            String      @id @default(cuid())
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  stage         String      // CREATED, CONSENT_GRANTED, REVENUE_VERIFIED, ADAPTER_TRANSLATED, OFFICER_REVIEW, APPROVED, REJECTED
-  status        String      // SUCCESS, PENDING, ERROR
+  stage         String
+  status        String
   details       String
   actor         String
   timestamp     DateTime    @default(now())
 }
 
 model Consent {
-  id             String       @id @default(cuid())
-  citizenId      String
-  citizen        Citizen      @relation(fields: [citizenId], references: [id], onDelete: Cascade)
-  applicationId  String
-  application    Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  requestedByDept String      // MUNICIPAL, etc.
-  sourceDept     String       // REVENUE, etc.
-  purpose        String
-  dataFields     String       // JSON string array of requested fields e.g. ["name", "address", "property_tax_cleared"]
-  status         String       @default("PENDING") // PENDING, GRANTED, DENIED, REVOKED
-  grantedAt      DateTime?
-  revokedAt      DateTime?
-  expiresAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                   String      @id @default(cuid())
+  citizenId            String
+  citizen              Citizen     @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  applicationId        String
+  application          Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  requestedByDept      String
+  sourceDept           String
+  purpose              String
+  dataFields           String
+  status               String      @default("PENDING")
+  consentSignatureHash String      @default("")
+  grantedAt            DateTime?
+  revokedAt            DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 }
 
 model Integration {
-  id             String     @id @default(cuid())
-  departmentId   String
-  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  name           String     // "RevNet Citizen Registry", "MuniSys Licensing Engine"
-  endpointUrl    String
-  authType       String     @default("API_KEY") // API_KEY, OAUTH2, MUTUAL_TLS
-  status         String     @default("CONNECTED") // CONNECTED, DISCONNECTED, ERROR
-  responseTimeMs Int        @default(45)
-  lastHealthCheck DateTime  @default(now())
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  departmentId    String
+  department      Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name            String
+  endpointUrl     String
+  authType        String     @default("API_KEY")
+  status          String     @default("CONNECTED")
+  responseTimeMs  Int        @default(45)
+  lastHealthCheck DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model FieldMapping {
   id             String     @id @default(cuid())
   departmentId   String
   department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  sourceSystem   String     // RevNet, MuniSys, KaushalPortal
-  sourceField    String     // e.g. "citizen.fullName", "address_record.city_name"
-  targetSystem   String     // MahaSetu_CDM
-  targetField    String     // e.g. "name", "address.city"
-  transformation String?    // e.g. "DIRECT", "TO_UPPER", "CONCAT_ADDRESS", "BOOLEAN_FLAG"
+  sourceSystem   String
+  sourceField    String
+  targetSystem   String
+  targetField    String
+  transformation String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
 
 model AuditLog {
-  id           String   @id @default(cuid())
-  actorId      String
-  actorRole    String
-  action       String   // CONSENT_GRANTED, REVENUE_FETCH, MAPPING_TRANSFORM, MUNICIPAL_DISPATCH, APPLICATION_APPROVED
-  entityType   String   // APPLICATION, CONSENT, INTEGRATION, MAPPING
-  entityId     String
-  department   String
-  purpose      String
-  detailsJson  String
-  ipAddress    String   @default("127.0.0.1")
-  hash         String   // Cryptographic SHA-256 integrity hash
-  timestamp    DateTime @default(now())
+  id          String   @id @default(cuid())
+  actorId     String
+  actorRole   String
+  action      String
+  entityType  String
+  entityId    String
+  department  String
+  purpose     String
+  detailsJson String
+  ipAddress   String   @default("127.0.0.1")
+  prevHash    String   @default("0000000000000000000000000000000000000000000000000000000000000000")
+  hash        String
+  timestamp   DateTime @default(now())
+
+  @@index([timestamp])
 }
 
 model Event {
   id          String   @id @default(cuid())
-  eventType   String   // APPLICATION_CREATED, CONSENT_GRANTED, REVENUE_VERIFIED, APPLICATION_APPROVED, NOTIFICATION_DISPATCHED
-  source      String   // CITIZEN_PORTAL, REVENUE_ADAPTER, MUNICIPAL_ADAPTER, MAHASETU_CORE
+  eventType   String
+  source      String
   payloadJson String
   processed   Boolean  @default(true)
   timestamp   DateTime @default(now())
@@ -176,7 +188,34 @@ model Notification {
   citizen   Citizen  @relation(fields: [citizenId], references: [id], onDelete: Cascade)
   title     String
   message   String
-  type      String   @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
+  type      String   @default("INFO")
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model RevenueCitizenRecord {
+  id          String   @id @default(cuid())
+  mobile      String   @unique
+  payloadJson String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MunicipalPermit {
+  id                      String    @id @default(cuid())
+  applicationNumber       String    @unique
+  permitId                String    @unique
+  mahasetuApplicationId   String?
+  applicantName           String
+  businessTitle           String
+  premisesAddress         String
+  wardNo                  String
+  tradeCategory           String
+  revenueClearanceRef     String
+  officerDecision         String    @default("PENDING")
+  officerComments         String?
+  issuedAt                DateTime?
+  permitCertificateNumber String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 }

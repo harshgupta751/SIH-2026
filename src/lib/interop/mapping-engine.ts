@@ -135,6 +135,10 @@ export class DataMappingEngine {
           val = val.toUpperCase();
         } else if (rule.transformation === 'BOOLEAN_FLAG') {
           val = Boolean(val);
+        } else if (rule.transformation === 'FORMAT_MOBILE' && val != null) {
+          val = String(val).replace(/\D/g, '').slice(-10);
+        } else if (rule.transformation === 'CONCAT_ADDRESS' && typeof val === 'string') {
+          val = val.trim();
         }
         this.setNestedValue(result, rule.targetField, val);
       }

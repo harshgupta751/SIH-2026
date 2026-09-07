@@ -1,38 +1,27 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { requireSession } from '@/lib/auth/guards';
 
 export async function GET() {
-  const departments = [
-    {
-      id: 'DEP-REV',
-      code: 'REVENUE',
-      name: 'Department of Revenue & Land Records',
-      systemName: 'RevNet',
-      description: 'Custodian of cadastral land parcels, title deeds, and property tax clearances.',
-      status: 'ONLINE',
-      apiBaseUrl: '/api/mock/revenue',
-      latencyMs: 38,
-    },
-    {
-      id: 'DEP-MUNI',
-      code: 'MUNICIPAL',
-      name: 'Municipal Corporation Department',
-      systemName: 'MuniSys',
-      description: 'Authority for commercial trade licenses, ward inspections, and business zoning.',
-      status: 'ONLINE',
-      apiBaseUrl: '/api/mock/municipal',
-      latencyMs: 42,
-    },
-    {
-      id: 'DEP-EMP',
-      code: 'EMPLOYMENT',
-      name: 'Skill Development & Employment Department',
-      systemName: 'KaushalPortal',
-      description: 'State employment schemes, entrepreneurship subsidies, and vocational certificates.',
-      status: 'ONLINE',
-      apiBaseUrl: '/api/mock/employment',
-      latencyMs: 35,
-    },
-  ];
+  const auth = requireSession();
+  if ('response' in auth) return auth.response;
 
-  return NextResponse.json({ success: true, departments });
+  const departments = await prisma.department.findMany({
+    include: { integrations: true },
+    orderBy: { name: 'asc' },
+  });
+
+  return NextResponse.json({
+    success: true,
+    departments: departments.map((d) => ({
+      id: d.id,
+      code: d.code,
+      name: d.name,
+      systemName: d.integrations[0]?.name || d.name,
+      description: d.description,
+      status: d.status,
+      apiBaseUrl: d.apiBaseUrl,
+      latencyMs: d.integrations[0]?.responseTimeMs ?? null,
+    })),
+  });
 }

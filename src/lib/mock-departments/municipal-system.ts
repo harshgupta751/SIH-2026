@@ -1,4 +1,5 @@
-import { MuniSysApplicationPayload } from '../interop/types';
+import { prisma } from '@/lib/db/prisma';
+import { MuniSysApplicationPayload } from '@/lib/interop/types';
 
 export interface MunicipalPermitRecord {
   permitId: string;
@@ -13,97 +14,113 @@ export interface MunicipalPermitRecord {
   officerComments?: string;
   issuedAt?: string;
   permitCertificateNumber?: string;
+  mahasetuApplicationId?: string;
 }
 
-/**
- * MuniSys: Simulated Municipal Corporation Department System
- * Handles Trade Licenses, Ward Zoning, and Official Approvals.
- */
-class MunicipalSystemMock {
-  private applications: Map<string, MunicipalPermitRecord> = new Map();
+function toRecord(row: {
+  permitId: string;
+  applicationNumber: string;
+  applicantName: string;
+  businessTitle: string;
+  premisesAddress: string;
+  wardNo: string;
+  tradeCategory: string;
+  revenueClearanceRef: string;
+  officerDecision: string;
+  officerComments: string | null;
+  issuedAt: Date | null;
+  permitCertificateNumber: string | null;
+  mahasetuApplicationId: string | null;
+}): MunicipalPermitRecord {
+  return {
+    permitId: row.permitId,
+    applicationNumber: row.applicationNumber,
+    applicantName: row.applicantName,
+    businessTitle: row.businessTitle,
+    premisesAddress: row.premisesAddress,
+    wardNo: row.wardNo,
+    tradeCategory: row.tradeCategory,
+    revenueClearanceRef: row.revenueClearanceRef,
+    officerDecision: row.officerDecision as MunicipalPermitRecord['officerDecision'],
+    officerComments: row.officerComments || undefined,
+    issuedAt: row.issuedAt?.toISOString(),
+    permitCertificateNumber: row.permitCertificateNumber || undefined,
+    mahasetuApplicationId: row.mahasetuApplicationId || undefined,
+  };
+}
 
-  constructor() {
-    this.seedDefaultData();
-  }
-
-  private seedDefaultData() {
-    const defaultAppNo = 'MUNI-2026-9012';
-    this.applications.set(defaultAppNo, {
-      permitId: 'MUNI-PRM-101',
-      applicationNumber: defaultAppNo,
-      applicantName: 'Vikram Joshi',
-      businessTitle: 'Joshi Hardware Mart',
-      premisesAddress: 'Shop 4, MG Road, Pune - 411001, MH',
-      wardNo: 'WARD-02',
-      tradeCategory: 'RETAIL_HARDWARE',
-      revenueClearanceRef: 'REV-CLR-110291',
-      officerDecision: 'APPROVED',
-      issuedAt: new Date(Date.now() - 86400000).toISOString(),
-      permitCertificateNumber: 'MH-PUNE-MUNI-LIC-4412',
+class MunicipalSystem {
+  public async registerApplication(
+    payload: MuniSysApplicationPayload,
+    mahasetuApplicationId?: string
+  ): Promise<MunicipalPermitRecord> {
+    const appNo = `MUNI-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const permitId = `PRM-${Date.now().toString().slice(-6)}`;
+    const row = await prisma.municipalPermit.create({
+      data: {
+        applicationNumber: appNo,
+        permitId,
+        mahasetuApplicationId: mahasetuApplicationId || null,
+        applicantName: payload.applicant_name,
+        businessTitle: payload.business_title,
+        premisesAddress: payload.premises_address,
+        wardNo: payload.ward_no,
+        tradeCategory: payload.trade_category,
+        revenueClearanceRef: payload.revenue_clearance_ref || 'PENDING_REV',
+        officerDecision: 'PENDING',
+        officerComments: 'Awaiting licensing officer review.',
+      },
     });
+    return toRecord(row);
   }
 
-  /**
-   * POST /api/mock/municipal/applications
-   */
-  public registerApplication(payload: MuniSysApplicationPayload): MunicipalPermitRecord {
-    const appNo = `MUNI-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const record: MunicipalPermitRecord = {
-      permitId: `PRM-${Date.now().toString().slice(-6)}`,
-      applicationNumber: appNo,
-      applicantName: payload.applicant_name,
-      businessTitle: payload.business_title,
-      premisesAddress: payload.premises_address,
-      wardNo: payload.ward_no,
-      tradeCategory: payload.trade_category,
-      revenueClearanceRef: payload.revenue_clearance_ref || 'PENDING_REV',
-      officerDecision: 'PENDING',
-      officerComments: 'Awaiting Municipal Licensing Officer review.',
-    };
-    this.applications.set(appNo, record);
-    return record;
+  public async getApplication(appNoOrPermitId: string): Promise<MunicipalPermitRecord | null> {
+    const row = await prisma.municipalPermit.findFirst({
+      where: {
+        OR: [
+          { applicationNumber: appNoOrPermitId },
+          { permitId: appNoOrPermitId },
+          { mahasetuApplicationId: appNoOrPermitId },
+          { permitCertificateNumber: appNoOrPermitId },
+        ],
+      },
+    });
+    return row ? toRecord(row) : null;
   }
 
-  /**
-   * GET /api/mock/municipal/applications/:appNo
-   */
-  public getApplication(appNo: string): MunicipalPermitRecord | null {
-    return this.applications.get(appNo) || null;
+  public async approveApplication(appNoOrPermitId: string, comments: string): Promise<MunicipalPermitRecord> {
+    const existing = await this.getApplication(appNoOrPermitId);
+    if (!existing) throw new Error(`Application ${appNoOrPermitId} not found in municipal system`);
+    const cert = `MH-TRADE-${Math.floor(100000 + Math.random() * 900000)}`;
+    const row = await prisma.municipalPermit.update({
+      where: { applicationNumber: existing.applicationNumber },
+      data: {
+        officerDecision: 'APPROVED',
+        officerComments: comments,
+        issuedAt: new Date(),
+        permitCertificateNumber: cert,
+      },
+    });
+    return toRecord(row);
   }
 
-  /**
-   * POST /api/mock/municipal/applications/:appNo/approve
-   */
-  public approveApplication(appNo: string, comments: string = 'All checks verified including Revenue clearance.'): MunicipalPermitRecord {
-    const record = this.applications.get(appNo);
-    if (!record) {
-      throw new Error(`Application ${appNo} not found in MuniSys`);
-    }
-    record.officerDecision = 'APPROVED';
-    record.officerComments = comments;
-    record.issuedAt = new Date().toISOString();
-    record.permitCertificateNumber = `MH-PUNE-TRADE-${Math.floor(100000 + Math.random() * 900000)}`;
-    this.applications.set(appNo, record);
-    return record;
+  public async rejectApplication(appNoOrPermitId: string, reason: string): Promise<MunicipalPermitRecord> {
+    const existing = await this.getApplication(appNoOrPermitId);
+    if (!existing) throw new Error(`Application ${appNoOrPermitId} not found in municipal system`);
+    const row = await prisma.municipalPermit.update({
+      where: { applicationNumber: existing.applicationNumber },
+      data: {
+        officerDecision: 'REJECTED',
+        officerComments: reason,
+      },
+    });
+    return toRecord(row);
   }
 
-  /**
-   * POST /api/mock/municipal/applications/:appNo/reject
-   */
-  public rejectApplication(appNo: string, reason: string): MunicipalPermitRecord {
-    const record = this.applications.get(appNo);
-    if (!record) {
-      throw new Error(`Application ${appNo} not found in MuniSys`);
-    }
-    record.officerDecision = 'REJECTED';
-    record.officerComments = reason;
-    this.applications.set(appNo, record);
-    return record;
-  }
-
-  public getAllApplications(): MunicipalPermitRecord[] {
-    return Array.from(this.applications.values());
+  public async getAllApplications(): Promise<MunicipalPermitRecord[]> {
+    const rows = await prisma.municipalPermit.findMany({ orderBy: { createdAt: 'desc' } });
+    return rows.map(toRecord);
   }
 }
 
-export const municipalMockSystem = new MunicipalSystemMock();
+export const municipalMockSystem = new MunicipalSystem();

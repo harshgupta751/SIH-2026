@@ -1,28 +1,23 @@
 import EventEmitter from 'events';
 import { MahaSetuEvent, MahaSetuEventType } from '../interop/types';
+import { prisma } from '@/lib/db/prisma';
 
-/**
- * In-Memory Reactive Event Bus adhering strictly to Kafka event semantics
- * Coordinates distributed workflows and notifies real-time listeners.
- */
 class ReactiveEventBus extends EventEmitter {
-  private history: MahaSetuEvent[] = [];
-
   constructor() {
     super();
-    this.setMaxListeners(100);
+    this.setMaxListeners(200);
   }
 
-  public publish(
+  public async publish(
     eventType: MahaSetuEventType,
     payload: {
       source: string;
       applicationId: string;
       citizenId: string;
       summary: string;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     }
-  ): MahaSetuEvent {
+  ): Promise<MahaSetuEvent> {
     const event: MahaSetuEvent = {
       id: `EVT-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
       eventType,
@@ -34,24 +29,43 @@ class ReactiveEventBus extends EventEmitter {
       metadata: payload.metadata || {},
     };
 
-    this.history.unshift(event);
-    if (this.history.length > 200) {
-      this.history.pop();
-    }
+    await prisma.event.create({
+      data: {
+        id: event.id,
+        eventType: event.eventType,
+        source: event.source,
+        payloadJson: JSON.stringify(event),
+      },
+    });
 
-    // Emit typed event and wildcard event for SSE streamers
     this.emit(eventType, event);
     this.emit('*', event);
-
     return event;
   }
 
-  public getHistory(limit: number = 30): MahaSetuEvent[] {
-    return this.history.slice(0, limit);
+  public async getHistory(limit = 30): Promise<MahaSetuEvent[]> {
+    const rows = await prisma.event.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
+    return rows.map((row) => {
+      try {
+        return JSON.parse(row.payloadJson) as MahaSetuEvent;
+      } catch {
+        return {
+          id: row.id,
+          eventType: row.eventType as MahaSetuEventType,
+          source: row.source,
+          applicationId: '',
+          citizenId: '',
+          summary: '',
+          timestamp: row.timestamp.toISOString(),
+        };
+      }
+    });
   }
 }
 
-// Global singleton instance across Next.js API routes
 declare global {
   var __mahasetu_event_bus: ReactiveEventBus | undefined;
 }

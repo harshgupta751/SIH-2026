@@ -45,7 +45,7 @@ class EmploymentSystemMock {
   public checkEligibility(mobile: string, hasTradeLicense: boolean): KaushalCitizenPayload {
     return {
       candidate_profile: {
-        legal_name: mobile === '9876543210' ? 'Rahul Sharma' : 'Applicant',
+        legal_name: 'Applicant',
         contact_digits: mobile,
         highest_qualification: 'Bachelor of Technology',
         sector: 'INFORMATION_TECHNOLOGY_SERVICES',

@@ -1,22 +1,34 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { requireRoles } from '@/lib/auth/guards';
 import { revenueAdapter } from '@/lib/interop/adapters/revenue.adapter';
 import { municipalAdapter } from '@/lib/interop/adapters/municipal.adapter';
 import { employmentAdapter } from '@/lib/interop/adapters/employment.adapter';
 
 export async function POST(req: Request) {
+  const auth = requireRoles(['ADMIN']);
+  if ('response' in auth) return auth.response;
+
   try {
     const body = await req.json();
-    const { departmentCode = 'REVENUE' } = body;
+    const departmentCode = String(body.departmentCode || 'REVENUE');
 
     let result;
-    if (departmentCode === 'REVENUE') {
-      result = await revenueAdapter.testHealth();
-    } else if (departmentCode === 'MUNICIPAL') {
-      result = await municipalAdapter.testHealth();
-    } else if (departmentCode === 'EMPLOYMENT') {
-      result = await employmentAdapter.testHealth();
-    } else {
-      return NextResponse.json({ success: false, error: 'Unknown department code' }, { status: 400 });
+    if (departmentCode === 'REVENUE') result = await revenueAdapter.testHealth();
+    else if (departmentCode === 'MUNICIPAL') result = await municipalAdapter.testHealth();
+    else if (departmentCode === 'EMPLOYMENT') result = await employmentAdapter.testHealth();
+    else return NextResponse.json({ success: false, error: 'Unknown department code' }, { status: 400 });
+
+    const dept = await prisma.department.findUnique({ where: { code: departmentCode } });
+    if (dept) {
+      await prisma.department.update({
+        where: { id: dept.id },
+        data: { status: result.status },
+      });
+      await prisma.integration.updateMany({
+        where: { departmentId: dept.id },
+        data: { status: result.status === 'HEALTHY' ? 'CONNECTED' : 'ERROR', responseTimeMs: result.latencyMs, lastHealthCheck: new Date() },
+      });
     }
 
     return NextResponse.json({
@@ -25,7 +37,8 @@ export async function POST(req: Request) {
       ...result,
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Health check failed';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
