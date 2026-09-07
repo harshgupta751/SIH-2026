@@ -29,6 +29,26 @@ npm start
 
 Health check: `GET /api/health`
 
+## Deploy on Vercel
+
+1. Import the repo and set **Environment Variables** (Production + Preview):
+
+| Variable | Required |
+|---|---|
+| `DATABASE_URL` | Yes — Neon PostgreSQL connection string |
+| `SESSION_SECRET` | Yes — min 16 random characters |
+| `GEMINI_API_KEY` | Yes — for assistant chatbot |
+| `NEXT_PUBLIC_APP_URL` | Yes — your Vercel URL (e.g. `https://your-app.vercel.app`) |
+
+2. Build command (default via `vercel.json`): `prisma generate && next build`
+
+3. After first deploy, run schema + seed against Neon (from your machine):
+
+```bash
+npx prisma db push
+node prisma/seed.js
+```
+
 ## Seeded staff accounts
 
 Created by `node prisma/seed.js` (change passwords immediately):

@@ -1,8 +1,8 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { eventBus } from '@/lib/events/event-bus';
 import { MahaSetuEvent } from '@/lib/interop/types';
 import { getSessionFromCookieHeader } from '@/lib/auth/session';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const user = getSessionFromCookieHeader(req.headers.get('cookie'));

@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guards';

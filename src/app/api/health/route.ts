@@ -1,7 +1,7 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {

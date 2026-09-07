@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE } from '@/lib/auth/session';

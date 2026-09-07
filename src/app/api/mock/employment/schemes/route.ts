@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth/guards';
 import { employmentMockSystem } from '@/lib/mock-departments/employment-system';

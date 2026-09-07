@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { requireRoles } from '@/lib/auth/guards';
 import { employmentAdapter } from '@/lib/interop/adapters/employment.adapter';

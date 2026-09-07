@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { requireSession, isOfficer, forbidden } from '@/lib/auth/guards';
 import { getApplicationById } from '@/lib/db/application-store';

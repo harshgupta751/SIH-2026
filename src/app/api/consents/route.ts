@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { requireRoles, requireSession, forbidden } from '@/lib/auth/guards';
 import { createConsentRequest, getConsentsForCitizen } from '@/lib/consent/consent-manager';

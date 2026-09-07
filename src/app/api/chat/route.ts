@@ -1,7 +1,7 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { answerChatMessage } from '@/lib/chatbot/responder';
-
-export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {

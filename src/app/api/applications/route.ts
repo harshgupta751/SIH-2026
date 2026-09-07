@@ -1,3 +1,5 @@
+export { dynamic, runtime } from '@/lib/api/route-config';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireRoles, requireSession, isOfficer, clientIp } from '@/lib/auth/guards';
