@@ -11,9 +11,11 @@
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
-    "test:interop": "npx --yes tsx scripts/test-interop.ts"
+    "test:interop": "npx --yes tsx scripts/test-interop.ts",
+    "test:chatbot": "npx --yes tsx scripts/test-chatbot.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "@prisma/client": "^5.21.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.453.0",

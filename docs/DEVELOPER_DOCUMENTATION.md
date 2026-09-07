@@ -35,6 +35,7 @@ All application state (users, citizens, applications, consents, audit, events, r
 | Auth | scrypt password hashing + HMAC-signed `mahasetu_session` cookie |
 | Crypto | Node.js `crypto` (SHA-256 audit chain) |
 | Real-time | `EventEmitter` singleton + SSE; events also written to `Event` table |
+| Assistant | Google Gemini API (`@google/generative-ai`) with scoped system prompt |
 | Edge middleware | `src/middleware.ts` + Web Crypto session verification |
 
 ---
@@ -61,9 +62,11 @@ SIH-2026/
 │   ├── components/
 │   │   ├── Navbar.tsx
 │   │   ├── BrandMark.tsx
+│   │   ├── chat/MahaSetuAssistant.tsx
 │   │   └── theme/              # ThemeProvider + ThemeToggle
 │   └── lib/
 │       ├── auth/               # password, session, session-edge, guards, use-session
+│       ├── chatbot/            # knowledge, Gemini client, scope guard, fallback
 │       ├── cn.ts
 │       ├── db/prisma.ts
 │       ├── db/application-store.ts   # Prisma-backed app/service/mapping helpers
@@ -116,6 +119,10 @@ NODE_ENV="development"
 ADMIN_EMAIL="admin@mahasetu.gov.in"
 ADMIN_PASSWORD="ChangeMe#2026"
 SEED_PASSWORD="ChangeMe#2026"
+
+# Gemini — MahaSetu assistant chatbot (get a key at https://aistudio.google.com/apikey)
+GEMINI_API_KEY="your-gemini-api-key"
+GEMINI_MODEL="gemini-2.0-flash"
 ```
 
 **Neon notes**
@@ -302,12 +309,13 @@ All protected routes require a valid `mahasetu_session` cookie unless noted. JSO
 | POST | `/api/integrations/test` | `ADMIN` |
 | GET | `/api/integrations` | `OFFICER_*`, `ADMIN` |
 
-### 8.5 Real-time & health
+### 8.5 Real-time, health & assistant
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/events/stream` | SSE; authenticated; citizen-filtered events |
 | GET | `/api/health` | Public; DB connectivity probe |
+| POST | `/api/chat` | Public; body `{ message }` — MahaSetu-scoped assistant only |
 
 ### 8.6 Mock departmental APIs
 
@@ -344,13 +352,51 @@ Does **not** seed citizen accounts — citizens register via `/register`.
 | `db:seed` | `node prisma/seed.js` |
 | `db:studio` | `prisma studio` |
 | `test:interop` | `npx tsx scripts/test-interop.ts` |
+| `test:chatbot` | `npx tsx scripts/test-chatbot.ts` |
 
 ---
 
-## 11. Testing
+## 11. MahaSetu assistant (chatbot)
+
+Floating UI in `src/components/chat/MahaSetuAssistant.tsx`, mounted from `src/app/layout.tsx`.
+
+| Piece | Path | Role |
+|---|---|---|
+| Knowledge | `src/lib/chatbot/knowledge.ts` | Reference facts, in/out-of-scope patterns, fallback intents |
+| System prompt | `src/lib/chatbot/system-prompt.ts` | Gemini system instruction (MahaSetu-only rules + knowledge digest) |
+| Gemini client | `src/lib/chatbot/gemini.ts` | `askGemini()` via `@google/generative-ai` |
+| Responder | `src/lib/chatbot/responder.ts` | `validateChatMessage()` guard → Gemini → fallback |
+| Fallback | `src/lib/chatbot/fallback.ts` | Rule-based answers when API key missing or request fails |
+| API | `src/app/api/chat/route.ts` | `POST` JSON `{ message }` |
+
+**Flow**
+
+1. `validateChatMessage()` — blocks empty, too-long, off-topic, and unknown questions **before** calling Gemini.  
+2. Greetings answered locally (no API call).  
+3. In-scope questions → `askGemini()` with `MAHASETU_SYSTEM_PROMPT`.  
+4. Gemini instructed to refuse off-topic questions with the exact `CHAT_OUT_OF_SCOPE` sentence.  
+5. On API error or missing `GEMINI_API_KEY` → `answerChatMessageFallback()`.
+
+**Environment**
+
+```env
+GEMINI_API_KEY="..."
+GEMINI_MODEL="gemini-2.0-flash"   # optional
+```
+
+Restart the server after changing `.env`.
+
+```bash
+npm run test:chatbot
+```
+
+---
+
+## 12. Testing
 
 ```bash
 npm run test:interop    # mapping engine unit tests (no DB)
+npm run test:chatbot    # assistant scope and intent tests
 ```
 
 Manual E2E:
@@ -363,7 +409,13 @@ Manual E2E:
 
 ---
 
-## 12. How to extend
+## 13. How to extend
+
+### Add a chatbot intent
+
+1. Add patterns + answer to `CHAT_KNOWLEDGE` in `src/lib/chatbot/knowledge.ts`.  
+2. Optionally add `links` for deep navigation.  
+3. Run `npm run test:chatbot` to verify scope rules still pass.
 
 ### Add a department connector
 
@@ -387,7 +439,7 @@ Replace in-process mock calls in adapters with `fetch(department.apiBaseUrl + �
 
 ---
 
-## 13. Known limitations
+## 14. Known limitations
 
 1. **Employment connector** — scheme catalogue is in-memory; only eligibility is exercised in the subsidy pipeline.  
 2. **Mock departmental systems** — Revenue and Municipal persist in Postgres but represent simulated legacy schemas, not live government APIs.  
@@ -396,11 +448,14 @@ Replace in-process mock calls in adapters with `fetch(department.apiBaseUrl + �
 5. **Next.js 14.2.15** — upgrade to a patched release for known security advisories.  
 6. **`.env` must be saved** — Prisma and `npm start` read the on-disk file only.
 
+7. **Assistant** — requires `GEMINI_API_KEY` for full answers; falls back to rule-based intents if unset or on API failure. Scope guard still blocks obvious off-topic questions before Gemini is called.
+
 ---
 
-## 14. API file index
+## 15. API file index
 
 ```
+src/app/api/chat/route.ts
 src/app/api/auth/{login,logout,register,me}/route.ts
 src/app/api/citizens/me/route.ts
 src/app/api/applications/route.ts

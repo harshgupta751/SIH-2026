@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import MahaSetuAssistant from '@/components/chat/MahaSetuAssistant';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 const sans = IBM_Plex_Sans({
@@ -61,6 +62,7 @@ export default function RootLayout({
               <p className="text-[11px] uppercase tracking-[0.16em] text-mute">Revenue · Municipal · Employment</p>
             </div>
           </footer>
+          <MahaSetuAssistant />
         </ThemeProvider>
       </body>
     </html>

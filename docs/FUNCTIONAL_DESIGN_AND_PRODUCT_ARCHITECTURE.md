@@ -26,6 +26,7 @@ It reflects the **current production implementation**: PostgreSQL persistence, r
 | Reusable connectors | `BaseAdapter` + Revenue / Municipal / Employment adapters |
 | Audit logs & RBAC | SHA-256 hash-chained audit ledger; roles `CITIZEN`, `OFFICER_*`, `ADMIN` |
 | Monitoring | Admin connector health/ping, audit trail, `/api/health` |
+| In-app help | MahaSetu assistant chatbot (platform-scoped Q&A on every page) |
 
 ---
 
@@ -288,6 +289,22 @@ Shown when an application is `CONSENT_PENDING` with a `PENDING` consent.
 | Schema sandbox | Paste JSON → `POST /api/integrations/mappings` with `sourceData` → view CDM output |
 | Connectors | Adapter health cards; **Ping** updates latency in DB |
 | Audit trail | Hash-chained log entries with `prevHash` and `hash` |
+
+### 7.8 MahaSetu assistant (global chatbot)
+
+Available on every page via the floating control in the layout (`MahaSetuAssistant`).
+
+| Behaviour | Detail |
+|---|---|
+| Scope | **MahaSetu platform only** — registration, services, consent, applications, officer/admin consoles, security, setup |
+| Out of scope | General programming, homework, weather, entertainment, and any non-MahaSetu topic → polite refusal |
+| Engine | Google **Gemini API** (`@google/generative-ai`) with strict MahaSetu system prompt; scope guard blocks off-topic questions before the API call; rule-based fallback if the key is missing or the API fails |
+| Config | `GEMINI_API_KEY` and optional `GEMINI_MODEL` (default `gemini-2.0-flash`) in `.env` |
+| API | `POST /api/chat` with `{ message }` → `{ reply, intentId, inScope, links? }` |
+| UX | Suggested prompts, deep links to `/register`, `/login`, `/citizen`, etc.; 500-character limit |
+
+Example in-scope: “How do I apply for a trade license?”  
+Example out-of-scope: “What is an array?” → assistant refuses and asks for a MahaSetu question.
 
 ---
 

@@ -11,7 +11,7 @@ Government interoperability platform: citizens apply once, departments exchange 
 
 ```bash
 cp .env.example .env
-# Set DATABASE_URL, SESSION_SECRET (long random string), and production passwords
+# Set DATABASE_URL, SESSION_SECRET (long random string), GEMINI_API_KEY, and production passwords
 
 npm install
 npx prisma generate
@@ -50,6 +50,8 @@ Citizens self-register at `/register`. Registration enrols their address in the 
 4. The responsible officer reviews the linked clearances and sanctions or rejects.
 5. The citizen dashboard updates over the live event stream; an approved certificate can be printed.
 
+Use the **MahaSetu assistant** (floating chat on every page) for platform help — powered by Google Gemini with strict MahaSetu-only scope. Set `GEMINI_API_KEY` in `.env` (see `.env.example`).
+
 ## Scripts
 
 | Script | Purpose |
@@ -60,3 +62,4 @@ Citizens self-register at `/register`. Registration enrols their address in the 
 | `npm run db:push` | Apply Prisma schema |
 | `npm run db:seed` | Departments, services, mappings, staff users |
 | `npm run test:interop` | Mapping-engine unit tests |
+| `npm run test:chatbot` | Assistant scope and intent tests |
